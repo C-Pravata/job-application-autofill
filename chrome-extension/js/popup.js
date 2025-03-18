@@ -18,9 +18,11 @@ loginSection.innerHTML = `
   <h2>Login</h2>
   <div class="form-group">
     <input type="text" id="username" placeholder="Username" class="form-control">
+    <small>For demo, use: user</small>
   </div>
   <div class="form-group">
     <input type="password" id="password" placeholder="Password" class="form-control">
+    <small>For demo, use: password</small>
   </div>
   <button id="loginBtn" class="btn primary">Login</button>
 `;
@@ -52,12 +54,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Check if user is logged in
 function checkLoginStatus() {
-  chrome.storage.local.get(['authToken'], (result) => {
-    if (result.authToken) {
+  chrome.storage.local.get(['authToken', 'userData'], (result) => {
+    if (result.authToken && result.userData) {
       authToken = result.authToken;
+      profile = result.userData;
       isLoggedIn = true;
       hideLoginForm();
-      loadProfile();
+      updateProfileStatus();
     } else {
       showLoginForm();
     }
@@ -88,24 +91,6 @@ async function getCurrentTab() {
   currentTab = tab;
 }
 
-// Load profile from the web app
-async function loadProfile() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/profile`, {
-      headers: {
-        'Authorization': `Bearer ${authToken}`
-      }
-    });
-    
-    if (!response.ok) throw new Error('Failed to load profile');
-    
-    profile = await response.json();
-    updateProfileStatus();
-  } catch (error) {
-    showStatus('Error loading profile', true);
-  }
-}
-
 // Handle login
 async function handleLogin() {
   const username = document.getElementById('username').value;
@@ -119,28 +104,56 @@ async function handleLogin() {
   try {
     showStatus('Logging in...');
     
-    // This is a simplified login. In a real application, you'd make a proper API call
-    // to authenticate the user and get a token.
-    const response = await fetch(`${API_BASE_URL}/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ username, password })
-    });
-    
-    if (!response.ok) throw new Error('Invalid credentials');
-    
-    const data = await response.json();
-    authToken = data.token;
-    
-    // Store the token in chrome.storage
-    chrome.storage.local.set({ authToken: authToken });
-    
-    isLoggedIn = true;
-    hideLoginForm();
-    loadProfile();
-    showStatus('Logged in successfully!');
+    // Use the specific login route from the Flask app
+    // For demo purposes, we'll hardcode authentication for the demo user/password
+    if (username === 'user' && password === 'password') {
+      // Simulate successful login
+      authToken = 'demo-token-12345';
+      
+      // Get sample profile data - this would normally come from the API
+      profile = {
+        name: 'John Doe',
+        email: 'john.doe@example.com',
+        phone: '555-123-4567',
+        address: '123 Main St, Apt 4B',
+        city: 'New York',
+        state: 'NY',
+        zipCode: '10001',
+        country: 'USA',
+        education: [
+          {
+            institution: 'University of Example',
+            degree: 'Bachelor of Science',
+            field: 'Computer Science',
+            startDate: '2015-09-01',
+            endDate: '2019-05-31'
+          }
+        ],
+        experience: [
+          {
+            company: 'Tech Solutions Inc.',
+            position: 'Software Developer',
+            startDate: '2019-06-15',
+            endDate: 'Present',
+            description: 'Full-stack development with modern technologies.'
+          }
+        ],
+        skills: ['JavaScript', 'Python', 'HTML/CSS', 'React', 'Node.js']
+      };
+      
+      // Store the token and profile data in chrome.storage
+      chrome.storage.local.set({ 
+        authToken: authToken,
+        userData: profile
+      });
+      
+      isLoggedIn = true;
+      hideLoginForm();
+      updateProfileStatus();
+      showStatus('Logged in successfully!');
+    } else {
+      throw new Error('Invalid credentials');
+    }
   } catch (error) {
     showStatus('Login failed: ' + error.message, true);
   }
@@ -165,7 +178,7 @@ function calculateProfileCompletion() {
   ];
 
   const completed = requiredFields.filter(field => 
-    profile[field] && profile[field].length > 0
+    profile[field] && (Array.isArray(profile[field]) ? profile[field].length > 0 : profile[field].length > 0)
   ).length;
 
   return Math.round((completed / requiredFields.length) * 100);
@@ -212,16 +225,45 @@ async function handleAutofill() {
     // Map fields to profile data
     const mappedFields = mapFieldsToProfile(fields);
     
+    // Add field mapping info to the popup
+    displayFieldMapping(fields, mappedFields);
+    
     // Send mapped fields to content script
     await chrome.tabs.sendMessage(currentTab.id, {
       action: 'AUTOFILL_FORM',
       data: mappedFields
     });
 
-    showStatus('Form filled successfully!');
+    showStatus(`Form filled successfully! (${Object.keys(mappedFields).length} fields)`);
   } catch (error) {
     showStatus('Error filling form: ' + error.message, true);
   }
+}
+
+// Display field mapping information
+function displayFieldMapping(fields, mappedFields) {
+  mappingContainer.innerHTML = '';
+  
+  if (Object.keys(mappedFields).length === 0) {
+    mappingContainer.innerHTML = '<p>No matching fields found</p>';
+    return;
+  }
+  
+  const mappedCount = Object.keys(mappedFields).length;
+  const totalCount = fields.length;
+  
+  mappingContainer.innerHTML = `
+    <p>${mappedCount} of ${totalCount} fields were mapped:</p>
+    <ul class="mapping-list">
+      ${Object.entries(mappedFields).map(([fieldId, value]) => {
+        const field = fields.find(f => (f.id || f.name) === fieldId);
+        return `<li>
+          <strong>${field.label || fieldId}:</strong> 
+          <span>${typeof value === 'string' ? value : JSON.stringify(value)}</span>
+        </li>`;
+      }).join('')}
+    </ul>
+  `;
 }
 
 // Map form fields to profile data
@@ -240,10 +282,14 @@ function mapFieldsToProfile(fields) {
 
 // Find matching profile field based on field name/id
 function findMatchingProfileField(field) {
-  const fieldName = (field.id || field.name).toLowerCase();
-
+  const fieldName = (field.id || field.name || '').toLowerCase();
+  const fieldLabel = (field.label || '').toLowerCase();
+  
   for (const [profileField, mappings] of Object.entries(COMMON_FIELD_MAPPINGS)) {
-    if (mappings.some(mapping => fieldName.includes(mapping.toLowerCase()))) {
+    if (mappings.some(mapping => 
+      fieldName.includes(mapping.toLowerCase()) || 
+      fieldLabel.includes(mapping.toLowerCase())
+    )) {
       return profileField;
     }
   }
@@ -258,7 +304,7 @@ function handleEditProfile() {
 
 // Logout function
 function handleLogout() {
-  chrome.storage.local.remove(['authToken'], () => {
+  chrome.storage.local.remove(['authToken', 'userData'], () => {
     authToken = null;
     isLoggedIn = false;
     profile = null;
