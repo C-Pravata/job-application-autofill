@@ -118,4 +118,29 @@ h2 {
 .mapping-item label {
   min-width: 120px;
   font-size: 14px;
+}
+
+/* Login form styles */
+.login-section {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-control {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+#loginBtn {
+  width: 100%;
+  margin-top: 8px;
 } 

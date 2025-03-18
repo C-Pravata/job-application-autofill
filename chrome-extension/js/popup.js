@@ -1,5 +1,37 @@
 // Configuration
-const API_BASE_URL = 'http://localhost:5000'; // Update this with your web app's URL
+const API_BASE_URL = 'http://127.0.0.1:8080'; // Updated to point to the correct website
+let authToken = null;
+
+// DOM Elements
+const profileProgress = document.getElementById('profileProgress');
+const profileStatus = document.getElementById('profileStatus');
+const autofillBtn = document.getElementById('autofillBtn');
+const editProfileBtn = document.getElementById('editProfileBtn');
+const settingsBtn = document.getElementById('settingsBtn');
+const statusMessage = document.getElementById('statusMessage');
+const mappingContainer = document.getElementById('mappingContainer');
+
+// Login Elements
+const loginSection = document.createElement('div');
+loginSection.className = 'login-section';
+loginSection.innerHTML = `
+  <h2>Login</h2>
+  <div class="form-group">
+    <input type="text" id="username" placeholder="Username" class="form-control">
+  </div>
+  <div class="form-group">
+    <input type="password" id="password" placeholder="Password" class="form-control">
+  </div>
+  <button id="loginBtn" class="btn primary">Login</button>
+`;
+
+// State
+let profile = null;
+let currentTab = null;
+let fieldMappings = {};
+let isLoggedIn = false;
+
+// Common field mappings (unchanged)
 const COMMON_FIELD_MAPPINGS = {
   'name': ['name', 'full-name', 'fullName'],
   'email': ['email', 'emailAddress', 'email-address'],
@@ -11,26 +43,44 @@ const COMMON_FIELD_MAPPINGS = {
   'country': ['country', 'countryName'],
 };
 
-// DOM Elements
-const profileProgress = document.getElementById('profileProgress');
-const profileStatus = document.getElementById('profileStatus');
-const autofillBtn = document.getElementById('autofillBtn');
-const editProfileBtn = document.getElementById('editProfileBtn');
-const settingsBtn = document.getElementById('settingsBtn');
-const statusMessage = document.getElementById('statusMessage');
-const mappingContainer = document.getElementById('mappingContainer');
-
-// State
-let profile = null;
-let currentTab = null;
-let fieldMappings = {};
-
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
   await getCurrentTab();
-  await loadProfile();
+  checkLoginStatus();
   setupEventListeners();
 });
+
+// Check if user is logged in
+function checkLoginStatus() {
+  chrome.storage.local.get(['authToken'], (result) => {
+    if (result.authToken) {
+      authToken = result.authToken;
+      isLoggedIn = true;
+      hideLoginForm();
+      loadProfile();
+    } else {
+      showLoginForm();
+    }
+  });
+}
+
+// Show login form
+function showLoginForm() {
+  document.querySelector('.container').insertBefore(loginSection, document.querySelector('.status-section'));
+  document.querySelector('.status-section').style.display = 'none';
+  document.querySelector('.actions-section').style.display = 'none';
+  document.querySelector('.field-mapping').style.display = 'none';
+}
+
+// Hide login form
+function hideLoginForm() {
+  if (document.contains(loginSection)) {
+    document.querySelector('.container').removeChild(loginSection);
+  }
+  document.querySelector('.status-section').style.display = 'block';
+  document.querySelector('.actions-section').style.display = 'flex';
+  document.querySelector('.field-mapping').style.display = 'block';
+}
 
 // Get current tab
 async function getCurrentTab() {
@@ -41,13 +91,58 @@ async function getCurrentTab() {
 // Load profile from the web app
 async function loadProfile() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/profile`);
+    const response = await fetch(`${API_BASE_URL}/api/profile`, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+    
     if (!response.ok) throw new Error('Failed to load profile');
     
     profile = await response.json();
     updateProfileStatus();
   } catch (error) {
     showStatus('Error loading profile', true);
+  }
+}
+
+// Handle login
+async function handleLogin() {
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  
+  if (!username || !password) {
+    showStatus('Please enter username and password', true);
+    return;
+  }
+  
+  try {
+    showStatus('Logging in...');
+    
+    // This is a simplified login. In a real application, you'd make a proper API call
+    // to authenticate the user and get a token.
+    const response = await fetch(`${API_BASE_URL}/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ username, password })
+    });
+    
+    if (!response.ok) throw new Error('Invalid credentials');
+    
+    const data = await response.json();
+    authToken = data.token;
+    
+    // Store the token in chrome.storage
+    chrome.storage.local.set({ authToken: authToken });
+    
+    isLoggedIn = true;
+    hideLoginForm();
+    loadProfile();
+    showStatus('Logged in successfully!');
+  } catch (error) {
+    showStatus('Login failed: ' + error.message, true);
   }
 }
 
@@ -80,11 +175,22 @@ function calculateProfileCompletion() {
 function setupEventListeners() {
   autofillBtn.addEventListener('click', handleAutofill);
   editProfileBtn.addEventListener('click', handleEditProfile);
-  settingsBtn.addEventListener('click', handleSettings);
+  
+  // Add event listener for login button when it exists
+  document.addEventListener('click', (e) => {
+    if (e.target && e.target.id === 'loginBtn') {
+      handleLogin();
+    }
+  });
 }
 
 // Handle autofill button click
 async function handleAutofill() {
+  if (!isLoggedIn) {
+    showStatus('Please log in first', true);
+    return;
+  }
+  
   if (!profile) {
     showStatus('Please complete your profile first', true);
     return;
@@ -150,9 +256,15 @@ function handleEditProfile() {
   chrome.tabs.create({ url: `${API_BASE_URL}/profile` });
 }
 
-// Handle settings button click
-function handleSettings() {
-  chrome.runtime.openOptionsPage();
+// Logout function
+function handleLogout() {
+  chrome.storage.local.remove(['authToken'], () => {
+    authToken = null;
+    isLoggedIn = false;
+    profile = null;
+    showLoginForm();
+    showStatus('Logged out successfully');
+  });
 }
 
 // Show status message
