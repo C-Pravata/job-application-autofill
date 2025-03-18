@@ -9,10 +9,7 @@
     "scripting"
   ],
   "host_permissions": [
-    "*://*.indeed.com/*",
-    "*://*.linkedin.com/*",
-    "*://*.glassdoor.com/*",
-    "*://*.monster.com/*"
+    "<all_urls>"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -32,14 +29,10 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "*://*.indeed.com/*",
-        "*://*.linkedin.com/*",
-        "*://*.glassdoor.com/*",
-        "*://*.monster.com/*"
-      ],
+      "matches": ["<all_urls>"],
       "js": ["js/content.js"],
-      "css": ["css/content.css"]
+      "css": ["css/content.css"],
+      "run_at": "document_idle"
     }
   ]
 } 

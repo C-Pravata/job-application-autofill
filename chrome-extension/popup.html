@@ -1,39 +1,89 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Job Application Autofill</title>
   <link rel="stylesheet" href="css/popup.css">
 </head>
 <body>
-  <div class="container">
+  <header>
     <h1>Job Application Autofill</h1>
-    
-    <div class="status-section">
-      <div class="profile-status">
-        <h2>Profile Status</h2>
-        <div class="progress-bar">
-          <div id="profileProgress" class="progress"></div>
+  </header>
+  
+  <div class="container">
+    <!-- Login Form -->
+    <div id="login-form-container">
+      <form id="login-form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" value="user" required>
+          <small class="form-text">Demo user: "user"</small>
         </div>
-        <p id="profileStatus">Loading profile...</p>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" value="password" required>
+          <small class="form-text">Demo password: "password"</small>
+        </div>
+        <button type="submit" class="btn btn-primary">Log In</button>
+        <div id="login-message"></div>
+      </form>
+    </div>
+    
+    <!-- Profile Info (shown after login) -->
+    <div id="profile-info" style="display: none;">
+      <div class="profile-status-container">
+        <div id="profile-status">Profile 0% complete</div>
+        <button id="edit-profile-btn" class="btn btn-secondary">Edit Profile</button>
+        <button id="logout-btn" class="btn btn-outline">Log Out</button>
+      </div>
+      
+      <div class="steps-container">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-text">Go to a job application form</div>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-text">Click "Analyze Form" to detect fields</div>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-text">Click "Autofill" to complete the form</div>
+        </div>
       </div>
     </div>
-
-    <div class="actions-section">
-      <button id="autofillBtn" class="btn primary">Autofill Form</button>
-      <button id="editProfileBtn" class="btn secondary">Edit Profile</button>
-    </div>
-
-    <div class="field-mapping">
-      <h2>Field Mapping</h2>
-      <div id="mappingContainer">
-        <!-- Field mapping will be populated dynamically -->
+    
+    <!-- Autofill Actions -->
+    <div id="autofill-actions" style="display: none;">
+      <div class="action-btns">
+        <button id="analyze-form-btn" class="btn btn-primary">Analyze Form</button>
+        <button id="autofill-btn" class="btn btn-success">Autofill</button>
       </div>
-    </div>
-
-    <div class="footer">
-      <p class="status-message" id="statusMessage"></p>
+      
+      <div id="autofill-status-container">
+        <div id="mapping-status" class="info"></div>
+        <div id="autofill-status" class="info"></div>
+      </div>
+      
+      <!-- Field Mapping Section -->
+      <div id="field-mapping-section" style="display: none;">
+        <h3>Detected Form Fields</h3>
+        <p class="info-text">The extension will map these fields to your profile:</p>
+        <ul id="mapping-list" class="mapping-list"></ul>
+      </div>
+      
+      <!-- Test Form Link -->
+      <div class="test-form-container">
+        <p>Need to test? Open our <a href="test-form.html" target="_blank">sample job application form</a>.</p>
+      </div>
     </div>
   </div>
+  
+  <footer>
+    <p>Job Application Autofill Extension - v1.0</p>
+  </footer>
+  
   <script src="js/popup.js"></script>
 </body>
 </html> 
