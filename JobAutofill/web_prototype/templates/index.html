@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Job Application Autofill - Home{% endblock %}
+
+{% block content %}
+<div class="jumbotron">
+    <h1 class="display-4">Simplify Your Job Applications</h1>
+    <p class="lead">
+        Store your job application details once and autofill online job application forms with a single click.
+        Save time and focus on what matters - landing your dream job!
+    </p>
+    <hr class="my-4">
+    <p>
+        Get started by creating your profile and uploading your resume. Then use our Safari extension to autofill job applications instantly.
+    </p>
+    <a class="btn btn-primary btn-lg" href="{{ url_for('login') }}" role="button">
+        <i class="fas fa-rocket mr-2"></i>Get Started
+    </a>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-user-circle fa-3x text-primary mb-3"></i>
+                <h5 class="card-title">Create Your Profile</h5>
+                <p class="card-text">
+                    Enter your personal information, work history, and education details once and never type them again.
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-file-upload fa-3x text-primary mb-3"></i>
+                <h5 class="card-title">Upload Your Resume</h5>
+                <p class="card-text">
+                    Store your resume and other documents securely for easy access during job applications.
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-magic fa-3x text-primary mb-3"></i>
+                <h5 class="card-title">Autofill Applications</h5>
+                <p class="card-text">
+                    Use our Safari extension to automatically fill out job applications with your stored information.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="fas fa-shield-alt text-primary mr-2"></i>
+                    Secure & Private
+                </h5>
+                <p class="card-text">
+                    Your data is stored securely on your device. We use encryption to protect your sensitive information and never share it with third parties.
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="fas fa-bolt text-primary mr-2"></i>
+                    Fast & Efficient
+                </h5>
+                <p class="card-text">
+                    Save hours of repetitive form filling. Our app can reduce application time from 30 minutes to just a few clicks.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Education - Job Application Autofill{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2>
+            <i class="fas fa-edit text-primary mr-2"></i>Edit Education
+        </h2>
+        <p class="lead">Update your education details</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-3 mb-4">
+        <div class="list-group">
+            <a href="{{ url_for('profile') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-id-card mr-2"></i>Personal Information
+            </a>
+            <a href="{{ url_for('employment') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-briefcase mr-2"></i>Employment History
+            </a>
+            <a href="{{ url_for('education') }}" class="list-group-item list-group-item-action active">
+                <i class="fas fa-graduation-cap mr-2"></i>Education
+            </a>
+            <a href="{{ url_for('documents') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-file-alt mr-2"></i>Documents
+            </a>
+            <a href="{{ url_for('autofill') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-magic mr-2"></i>Autofill Job Application
+            </a>
+        </div>
+    </div>
+    
+    <div class="col-md-9">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-edit mr-2"></i>Edit Education
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('edit_education', edu_id=edu.id) }}">
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="degree">Degree/Certificate</label>
+                            <input type="text" class="form-control" id="degree" name="degree" value="{{ edu.degree }}" placeholder="e.g., Bachelor of Science, High School Diploma" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="field_of_study">Field of Study</label>
+                            <input type="text" class="form-control" id="field_of_study" name="field_of_study" value="{{ edu.field_of_study }}" placeholder="e.g., Computer Science, Business Administration">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="institution">Institution Name</label>
+                        <input type="text" class="form-control" id="institution" name="institution" value="{{ edu.institution }}" placeholder="Enter school, college, or university name" required>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="start_date">Start Date</label>
+                            <input type="month" class="form-control" id="start_date" name="start_date" value="{{ edu.start_date }}">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="end_date">End Date (or Expected)</label>
+                            <input type="month" class="form-control" id="end_date" name="end_date" value="{{ edu.end_date if edu.end_date != 'Present' else '' }}" {{ 'disabled' if edu.current_education else '' }}>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="current_education" name="current_education" {{ 'checked' if edu.current_education else '' }}>
+                                <label class="form-check-label" for="current_education">
+                                    I am currently studying here
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="location">Location</label>
+                            <input type="text" class="form-control" id="location" name="location" value="{{ edu.location }}" placeholder="City, State, Country">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="gpa">GPA (optional)</label>
+                            <input type="text" class="form-control" id="gpa" name="gpa" value="{{ edu.gpa }}" placeholder="e.g., 3.8/4.0">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="achievements">Achievements & Activities (optional)</label>
+                        <textarea class="form-control" id="achievements" name="achievements" rows="3" placeholder="Honors, awards, extracurricular activities, relevant coursework">{{ edu.achievements }}</textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <a href="{{ url_for('education') }}" class="btn btn-secondary mr-2">
+                            <i class="fas fa-arrow-left mr-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save mr-2"></i>Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Toggle end date field based on current education checkbox
+    document.getElementById('current_education').addEventListener('change', function() {
+        const endDateField = document.getElementById('end_date');
+        endDateField.disabled = this.checked;
+        if (this.checked) {
+            endDateField.value = '';
+        }
+    });
+</script>
+{% endblock %} 

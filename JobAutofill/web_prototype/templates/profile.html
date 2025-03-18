@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Personal Information - Job Application Autofill{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2>
+            <i class="fas fa-id-card text-primary mr-2"></i>Personal Information
+        </h2>
+        <p class="lead">Enter your personal details for job applications</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-3 mb-4">
+        <div class="list-group">
+            <a href="{{ url_for('profile') }}" class="list-group-item list-group-item-action active">
+                <i class="fas fa-id-card mr-2"></i>Personal Information
+            </a>
+            <a href="{{ url_for('employment') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-briefcase mr-2"></i>Employment History
+            </a>
+            <a href="{{ url_for('education') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-graduation-cap mr-2"></i>Education
+            </a>
+            <a href="{{ url_for('documents') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-file-alt mr-2"></i>Documents
+            </a>
+            <a href="{{ url_for('autofill') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-magic mr-2"></i>Autofill Job Application
+            </a>
+        </div>
+    </div>
+    
+    <div class="col-md-9">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-user-edit mr-2"></i>Edit Personal Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('profile') }}">
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="first_name">First Name</label>
+                            <input type="text" class="form-control" id="first_name" name="first_name" 
+                                   value="{{ personal_info.first_name or '' }}"
+                                   placeholder="Enter first name" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="last_name">Last Name</label>
+                            <input type="text" class="form-control" id="last_name" name="last_name" 
+                                   value="{{ personal_info.last_name or '' }}"
+                                   placeholder="Enter last name" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="email">Email Address</label>
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-envelope"></i>
+                                    </span>
+                                </div>
+                                <input type="email" class="form-control" id="email" name="email" 
+                                       value="{{ personal_info.email or '' }}"
+                                       placeholder="Enter email address" required>
+                            </div>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="phone">Phone Number</label>
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-phone"></i>
+                                    </span>
+                                </div>
+                                <input type="tel" class="form-control" id="phone" name="phone" 
+                                       value="{{ personal_info.phone or '' }}"
+                                       placeholder="Enter phone number" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="address">Address</label>
+                        <input type="text" class="form-control" id="address" name="address" 
+                               value="{{ personal_info.address or '' }}"
+                               placeholder="Enter street address">
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="city">City</label>
+                            <input type="text" class="form-control" id="city" name="city" 
+                                   value="{{ personal_info.city or '' }}"
+                                   placeholder="Enter city">
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label for="state">State</label>
+                            <input type="text" class="form-control" id="state" name="state" 
+                                   value="{{ personal_info.state or '' }}"
+                                   placeholder="Enter state">
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label for="zip">ZIP Code</label>
+                            <input type="text" class="form-control" id="zip" name="zip" 
+                                   value="{{ personal_info.zip or '' }}"
+                                   placeholder="Enter ZIP code">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="linkedin">LinkedIn Profile</label>
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">
+                                        <i class="fab fa-linkedin"></i>
+                                    </span>
+                                </div>
+                                <input type="url" class="form-control" id="linkedin" name="linkedin" 
+                                       value="{{ personal_info.linkedin or '' }}"
+                                       placeholder="https://linkedin.com/in/username">
+                            </div>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="website">Website/Portfolio</label>
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-globe"></i>
+                                    </span>
+                                </div>
+                                <input type="url" class="form-control" id="website" name="website" 
+                                       value="{{ personal_info.website or '' }}"
+                                       placeholder="https://yourwebsite.com">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="summary">Professional Summary</label>
+                        <textarea class="form-control" id="summary" name="summary" rows="4" 
+                                  placeholder="Brief professional summary or objective statement">{{ personal_info.summary or '' }}</textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save mr-2"></i>Save Personal Information
+                    </button>
+                    <button type="submit" name="continue" value="true" class="btn btn-success ml-2">
+                        <i class="fas fa-save mr-2"></i>Save and Continue
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

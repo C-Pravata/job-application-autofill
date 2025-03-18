@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Job Application Autofill</title>
+  <link rel="stylesheet" href="css/popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Job Application Autofill</h1>
+    
+    <div class="status-section">
+      <div class="profile-status">
+        <h2>Profile Status</h2>
+        <div class="progress-bar">
+          <div id="profileProgress" class="progress"></div>
+        </div>
+        <p id="profileStatus">Loading profile...</p>
+      </div>
+    </div>
+
+    <div class="actions-section">
+      <button id="autofillBtn" class="btn primary">Autofill Form</button>
+      <button id="editProfileBtn" class="btn secondary">Edit Profile</button>
+      <button id="settingsBtn" class="btn secondary">Settings</button>
+    </div>
+
+    <div class="field-mapping">
+      <h2>Field Mapping</h2>
+      <div id="mappingContainer">
+        <!-- Field mapping will be populated dynamically -->
+      </div>
+    </div>
+
+    <div class="footer">
+      <p class="status-message" id="statusMessage"></p>
+    </div>
+  </div>
+  <script src="js/popup.js"></script>
+</body>
+</html> 

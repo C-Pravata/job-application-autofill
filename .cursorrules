@@ -1,0 +1,246 @@
+# Instructions
+
+During your interaction with the user, if you find anything reusable in this project (e.g. version of a library, model name), especially about a fix to a mistake you made or a correction you received, you should take note in the `Lessons` section in the `.cursorrules` file so you will not make the same mistake again. 
+
+You should also use the `.cursorrules` file as a Scratchpad to organize your thoughts. Especially when you receive a new task, you should first review the content of the Scratchpad, clear old different task if necessary, first explain the task, and plan the steps you need to take to complete the task. You can use todo markers to indicate the progress, e.g.
+[X] Task 1
+[ ] Task 2
+
+Also update the progress of the task in the Scratchpad when you finish a subtask.
+Especially when you finished a milestone, it will help to improve your depth of task accomplishment to use the Scratchpad to reflect and plan.
+The goal is to help you maintain a big picture as well as the progress of the task. Always refer to the Scratchpad when you plan the next step.
+
+# Tools
+
+Note all the tools are in python. So in the case you need to do batch processing, you can always consult the python files and write your own script.
+
+## Screenshot Verification
+
+The screenshot verification workflow allows you to capture screenshots of web pages and verify their appearance using LLMs. The following tools are available:
+
+1. Screenshot Capture:
+```bash
+venv/bin/python tools/screenshot_utils.py URL [--output OUTPUT] [--width WIDTH] [--height HEIGHT]
+```
+
+2. LLM Verification with Images:
+```bash
+venv/bin/python tools/llm_api.py --prompt "Your verification question" --provider {openai|anthropic} --image path/to/screenshot.png
+```
+
+Example workflow:
+```python
+from screenshot_utils import take_screenshot_sync
+from llm_api import query_llm
+
+# Take a screenshot
+
+screenshot_path = take_screenshot_sync('https://example.com', 'screenshot.png')
+
+# Verify with LLM
+
+response = query_llm(
+    "What is the background color and title of this webpage?",
+    provider="openai",  # or "anthropic"
+    image_path=screenshot_path
+)
+print(response)
+```
+
+## LLM
+
+You always have an LLM at your side to help you with the task. For simple tasks, you could invoke the LLM by running the following command:
+```
+venv/bin/python ./tools/llm_api.py --prompt "What is the capital of France?" --provider "anthropic"
+```
+
+The LLM API supports multiple providers:
+- OpenAI (default, model: gpt-4o)
+- Azure OpenAI (model: configured via AZURE_OPENAI_MODEL_DEPLOYMENT in .env file, defaults to gpt-4o-ms)
+- DeepSeek (model: deepseek-chat)
+- Anthropic (model: claude-3-sonnet-20240229)
+- Gemini (model: gemini-pro)
+- Local LLM (model: Qwen/Qwen2.5-32B-Instruct-AWQ)
+
+But usually it's a better idea to check the content of the file and use the APIs in the `tools/llm_api.py` file to invoke the LLM if needed.
+
+## Web browser
+
+You could use the `tools/web_scraper.py` file to scrape the web.
+```
+venv/bin/python ./tools/web_scraper.py --max-concurrent 3 URL1 URL2 URL3
+```
+This will output the content of the web pages.
+
+## Search engine
+
+You could use the `tools/search_engine.py` file to search the web.
+```
+venv/bin/python ./tools/search_engine.py "your search keywords"
+```
+This will output the search results in the following format:
+```
+URL: https://example.com
+Title: This is the title of the search result
+Snippet: This is a snippet of the search result
+```
+If needed, you can further use the `web_scraper.py` file to scrape the web page content.
+
+# Lessons
+
+## User Specified Lessons
+
+- You have a python venv in ./venv. Use it.
+- Include info useful for debugging in the program output.
+- Read the file before you try to edit it.
+- Due to Cursor's limit, when you use `git` and `gh` and need to submit a multiline commit message, first write the message in a file, and then use `git commit -F <filename>` or similar command to commit. And then remove the file. Include "[Cursor] " in the commit message and PR title.
+
+## Cursor learned
+
+- For search results, ensure proper handling of different character encodings (UTF-8) for international queries
+- Add debug information to stderr while keeping the main output clean in stdout for better pipeline integration
+- When using seaborn styles in matplotlib, use 'seaborn-v0_8' instead of 'seaborn' as the style name due to recent seaborn version changes
+- Use 'gpt-4o' as the model name for OpenAI's GPT-4 with vision capabilities
+- For web applications using Flask, ensure proper file upload handling with secure filename generation and appropriate MIME type validation
+- When using custom Jinja2 filters in Flask templates (like nl2br), make sure to define them using @app.template_filter decorator in the Flask application
+
+# Scratchpad
+
+## Job Application Autofill App Project
+
+### Project Overview
+Building an iOS app with Safari extension to store job application details and autofill online job application forms.
+
+### Project Setup Plan
+[X] 1. Set up development environment
+  [X] Create project structure
+  [X] Set up virtual environment
+  [X] Install necessary packages
+  [X] Create requirements.txt
+
+[X] 2. Front-end Dashboard (Current Phase)
+  [X] Create basic UI structure
+  [X] Implement user profile management screens
+  [X] Design form for personal information
+  [X] Design form for employment history
+  [X] Design form for education
+  [X] Design document upload section
+  [X] Implement navigation between screens
+  [X] Enhance dashboard with dynamic data
+    [X] Add profile completion percentage with detailed section status
+    [X] Display document status (resume and cover letter)
+    [X] Show recent applications
+
+[ ] 3. Backend Development (Future Phase)
+  [ ] Set up data storage
+  [ ] Implement profile CRUD operations
+  [ ] Implement document storage
+  [ ] Set up Safari extension integration
+
+[ ] 4. Safari Extension (Future Phase)
+  [ ] Create extension structure
+  [ ] Implement form field detection
+  [ ] Implement autofill functionality
+  [ ] Test on common job platforms
+
+[ ] 5. Testing & Refinement (Future Phase)
+  [ ] Test on various job application sites
+  [ ] Refine autofill algorithms
+  [ ] Implement security features
+  [ ] User testing and feedback
+
+### Current Progress
+We have successfully enhanced the front-end dashboard for the Job Application Autofill App. The web prototype now includes:
+
+1. User authentication (login/logout)
+2. Dashboard with dynamic data:
+   - Profile completion percentage with detailed section status
+   - Document status indicators for resume and cover letter
+   - Recent applications section showing the latest job applications
+3. Personal information form with data persistence
+4. Employment history form with ability to add multiple jobs
+5. Education form with ability to add multiple education entries
+6. Document upload section for resumes and cover letters
+7. Autofill page for entering job application URLs and viewing application history
+
+The web prototype is built using:
+- Flask for the backend
+- Bootstrap 4 for the frontend styling
+- JavaScript for interactive elements
+- HTML templates for the UI structure
+- Session-based data storage for demonstration purposes
+
+### Next Steps
+1. Implement persistent data storage (database) to replace session storage
+2. Develop the Safari extension for form detection and autofill
+3. Integrate the web prototype with the iOS app
+4. Test the application on various job application sites
+
+### Recent Enhancements
+1. **Dashboard Improvements**:
+   - Added a circular progress indicator for profile completion
+   - Created individual section cards showing completion status
+   - Implemented document status indicators with progress bars
+   - Added recent applications section with links to revisit or autofill again
+   - Redesigned quick actions section with intuitive icons
+
+2. **Data Management**:
+   - Enhanced profile completion calculation to provide detailed section status
+   - Implemented sorting for recent applications to show most recent first
+   - Added conditional styling based on completion status
+
+3. **User Experience**:
+   - Improved visual feedback with color-coded status indicators
+   - Added confirmation dialogs for deletion actions
+   - Enhanced navigation between related sections
+
+## Job Application Autofill Chrome Extension Project
+
+### Project Overview
+Creating a Chrome extension to integrate with our existing job application autofill web app to enable automatic form filling on job application websites.
+
+### Project Setup Plan
+[X] 1. Chrome Extension Setup
+  [X] Create extension manifest and structure
+  [X] Design popup interface
+  [X] Implement content scripts
+  [X] Set up background scripts
+  [X] Configure permissions
+
+[X] 2. Core Functionality
+  [X] Implement API connection to main web app
+  [X] Create form field detection system
+  [X] Build field mapping logic
+  [X] Develop autofill engine
+  [X] Add manual field mapping UI
+
+[X] 3. User Interface
+  [X] Design popup menu
+  [X] Create settings panel
+  [X] Implement field mapping interface
+  [X] Add status indicators
+
+[ ] 4. Integration & Testing
+  [ ] Connect to web app API
+  [ ] Test on various job sites
+  [ ] Debug and optimize
+  [ ] Package for distribution
+
+### Technical Stack
+- Chrome Extension APIs
+- JavaScript/HTML/CSS
+- REST API integration
+- Chrome Storage API
+
+### Implementation Details
+1. Created manifest.json with necessary permissions and configurations
+2. Implemented popup UI with profile status and autofill controls
+3. Created content script for form detection and autofill
+4. Added background script for job site detection and logging
+5. Implemented CSS for visual feedback and UI elements
+
+### Next Steps
+1. Test the extension on various job sites
+2. Add error handling and recovery
+3. Implement analytics and logging
+4. Package for Chrome Web Store distribution

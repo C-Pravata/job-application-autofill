@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Employment History - Job Application Autofill{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2>
+            <i class="fas fa-briefcase text-primary mr-2"></i>Employment History
+        </h2>
+        <p class="lead">Manage your work experience for job applications</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-3 mb-4">
+        <div class="list-group">
+            <a href="{{ url_for('profile') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-id-card mr-2"></i>Personal Information
+            </a>
+            <a href="{{ url_for('employment') }}" class="list-group-item list-group-item-action active">
+                <i class="fas fa-briefcase mr-2"></i>Employment History
+            </a>
+            <a href="{{ url_for('education') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-graduation-cap mr-2"></i>Education
+            </a>
+            <a href="{{ url_for('documents') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-file-alt mr-2"></i>Documents
+            </a>
+            <a href="{{ url_for('autofill') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-magic mr-2"></i>Autofill Job Application
+            </a>
+        </div>
+    </div>
+    
+    <div class="col-md-9">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-plus-circle mr-2"></i>Add Work Experience
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('employment') }}">
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="job_title">Job Title</label>
+                            <input type="text" class="form-control" id="job_title" name="job_title" placeholder="Enter job title" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="company">Company Name</label>
+                            <input type="text" class="form-control" id="company" name="company" placeholder="Enter company name" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="start_date">Start Date</label>
+                            <input type="month" class="form-control" id="start_date" name="start_date" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="end_date">End Date</label>
+                            <input type="month" class="form-control" id="end_date" name="end_date">
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="current_job" name="current_job">
+                                <label class="form-check-label" for="current_job">
+                                    I currently work here
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="location">Location</label>
+                        <input type="text" class="form-control" id="location" name="location" placeholder="City, State, Country">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="responsibilities">Responsibilities & Achievements</label>
+                        <textarea class="form-control" id="responsibilities" name="responsibilities" rows="5" placeholder="Describe your key responsibilities and achievements in this role" required></textarea>
+                        <small class="form-text text-muted">Use bullet points for better readability (e.g., • Increased sales by 20%)</small>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save mr-2"></i>Add Work Experience
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">
+                    <i class="fas fa-history text-primary mr-2"></i>Saved Work Experience
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if employment_history and employment_history|length > 0 %}
+                    {% for job in employment_history %}
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h5 class="card-title mb-0">{{ job.job_title }}</h5>
+                                    <div>
+                                        <a href="{{ url_for('edit_employment', job_id=job.id) }}" class="btn btn-sm btn-outline-primary mr-1">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <a href="{{ url_for('delete_employment', job_id=job.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete('Are you sure you want to delete this work experience?')">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                                <h6 class="card-subtitle mb-2 text-muted">{{ job.company }}</h6>
+                                <p class="card-text">
+                                    <small class="text-muted">
+                                        <i class="fas fa-calendar-alt mr-1"></i>
+                                        {% if job.start_date %}
+                                            {{ job.start_date }}
+                                        {% endif %}
+                                        - 
+                                        {% if job.current_job %}
+                                            Present
+                                        {% else %}
+                                            {{ job.end_date }}
+                                        {% endif %}
+                                    </small>
+                                    {% if job.location %}
+                                        <small class="text-muted ml-3">
+                                            <i class="fas fa-map-marker-alt mr-1"></i>{{ job.location }}
+                                        </small>
+                                    {% endif %}
+                                </p>
+                                <p class="card-text">
+                                    {{ job.responsibilities|nl2br|safe }}
+                                </p>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle mr-2"></i>You haven't added any work experience yet. Use the form above to add your employment history.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Toggle end date field based on current job checkbox
+    document.getElementById('current_job').addEventListener('change', function() {
+        const endDateField = document.getElementById('end_date');
+        endDateField.disabled = this.checked;
+        if (this.checked) {
+            endDateField.value = '';
+        }
+    });
+    
+    // Function to confirm deletion
+    function confirmDelete(message) {
+        return confirm(message || 'Are you sure you want to delete this item?');
+    }
+</script>
+{% endblock %} 

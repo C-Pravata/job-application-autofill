@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Employment - Job Application Autofill{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2>
+            <i class="fas fa-edit text-primary mr-2"></i>Edit Work Experience
+        </h2>
+        <p class="lead">Update your work experience details</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-3 mb-4">
+        <div class="list-group">
+            <a href="{{ url_for('profile') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-id-card mr-2"></i>Personal Information
+            </a>
+            <a href="{{ url_for('employment') }}" class="list-group-item list-group-item-action active">
+                <i class="fas fa-briefcase mr-2"></i>Employment History
+            </a>
+            <a href="{{ url_for('education') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-graduation-cap mr-2"></i>Education
+            </a>
+            <a href="{{ url_for('documents') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-file-alt mr-2"></i>Documents
+            </a>
+            <a href="{{ url_for('autofill') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-magic mr-2"></i>Autofill Job Application
+            </a>
+        </div>
+    </div>
+    
+    <div class="col-md-9">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-edit mr-2"></i>Edit Work Experience
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('edit_employment', job_id=job.id) }}">
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="job_title">Job Title</label>
+                            <input type="text" class="form-control" id="job_title" name="job_title" value="{{ job.job_title }}" placeholder="Enter job title" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="company">Company Name</label>
+                            <input type="text" class="form-control" id="company" name="company" value="{{ job.company }}" placeholder="Enter company name" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="start_date">Start Date</label>
+                            <input type="month" class="form-control" id="start_date" name="start_date" value="{{ job.start_date }}" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="end_date">End Date</label>
+                            <input type="month" class="form-control" id="end_date" name="end_date" value="{{ job.end_date if job.end_date != 'Present' else '' }}" {{ 'disabled' if job.current_job else '' }}>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="current_job" name="current_job" {{ 'checked' if job.current_job else '' }}>
+                                <label class="form-check-label" for="current_job">
+                                    I currently work here
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="location">Location</label>
+                        <input type="text" class="form-control" id="location" name="location" value="{{ job.location }}" placeholder="City, State, Country">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="responsibilities">Responsibilities & Achievements</label>
+                        <textarea class="form-control" id="responsibilities" name="responsibilities" rows="5" placeholder="Describe your key responsibilities and achievements in this role" required>{{ job.responsibilities }}</textarea>
+                        <small class="form-text text-muted">Use bullet points for better readability (e.g., • Increased sales by 20%)</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <a href="{{ url_for('employment') }}" class="btn btn-secondary mr-2">
+                            <i class="fas fa-arrow-left mr-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save mr-2"></i>Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Toggle end date field based on current job checkbox
+    document.getElementById('current_job').addEventListener('change', function() {
+        const endDateField = document.getElementById('end_date');
+        endDateField.disabled = this.checked;
+        if (this.checked) {
+            endDateField.value = '';
+        }
+    });
+</script>
+{% endblock %} 

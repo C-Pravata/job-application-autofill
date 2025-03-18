@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Job Application Autofill{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2>
+            <i class="fas fa-tachometer-alt text-primary mr-2"></i>Dashboard
+        </h2>
+        <p class="lead">Welcome to your Job Application Autofill dashboard</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-3 mb-4">
+        <div class="list-group">
+            <a href="{{ url_for('profile') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-id-card mr-2"></i>Personal Information
+            </a>
+            <a href="{{ url_for('employment') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-briefcase mr-2"></i>Employment History
+            </a>
+            <a href="{{ url_for('education') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-graduation-cap mr-2"></i>Education
+            </a>
+            <a href="{{ url_for('documents') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-file-alt mr-2"></i>Documents
+            </a>
+            <a href="{{ url_for('autofill') }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-magic mr-2"></i>Autofill Job Application
+            </a>
+        </div>
+    </div>
+    
+    <div class="col-md-9">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-pie mr-2"></i>Profile Completion
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center mb-4">
+                    <div class="col-md-3 text-center">
+                        <div class="progress-circle mx-auto position-relative" style="width: 120px; height: 120px;">
+                            <div class="position-absolute" style="top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                                <h2 class="mb-0">{{ completion_percentage }}%</h2>
+                                <p class="mb-0 text-muted">Complete</p>
+                            </div>
+                            <svg width="120" height="120" viewBox="0 0 120 120">
+                                <circle cx="60" cy="60" r="54" fill="none" stroke="#e9ecef" stroke-width="12" />
+                                <circle cx="60" cy="60" r="54" fill="none" stroke="{{ 'green' if completion_percentage >= 75 else 'orange' if completion_percentage >= 25 else 'red' }}" stroke-width="12" stroke-dasharray="339.292" stroke-dashoffset="{{ 339.292 * (1 - completion_percentage / 100) }}" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="row">
+                            {% for section_name, section_data in completion_sections.items() %}
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-body p-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <h6 class="mb-0">
+                                                {% if section_name == 'personal_info' %}
+                                                    <i class="fas fa-id-card text-primary mr-2"></i>Personal Info
+                                                {% elif section_name == 'employment' %}
+                                                    <i class="fas fa-briefcase text-primary mr-2"></i>Employment
+                                                {% elif section_name == 'education' %}
+                                                    <i class="fas fa-graduation-cap text-primary mr-2"></i>Education
+                                                {% elif section_name == 'documents' %}
+                                                    <i class="fas fa-file-alt text-primary mr-2"></i>Documents
+                                                {% endif %}
+                                            </h6>
+                                            <span class="badge 
+                                                {% if section_data.status == 'Complete' %}
+                                                    badge-success
+                                                {% elif section_data.status == 'In progress' %}
+                                                    badge-warning
+                                                {% else %}
+                                                    badge-danger
+                                                {% endif %}">
+                                                {{ section_data.status }}
+                                            </span>
+                                        </div>
+                                        <div class="progress" style="height: 8px;">
+                                            <div class="progress-bar 
+                                                {% if section_data.status == 'Complete' %}
+                                                    bg-success
+                                                {% elif section_data.status == 'In progress' %}
+                                                    bg-warning
+                                                {% else %}
+                                                    bg-danger
+                                                {% endif %}" 
+                                                role="progressbar" 
+                                                style="width: {{ (section_data.completed / section_data.weight) * 100 }}%;" 
+                                                aria-valuenow="{{ section_data.completed }}" 
+                                                aria-valuemin="0" 
+                                                aria-valuemax="{{ section_data.weight }}">
+                                            </div>
+                                        </div>
+                                        <div class="mt-2">
+                                            <a href="{{ 
+                                                url_for('profile') if section_name == 'personal_info' else 
+                                                url_for('employment') if section_name == 'employment' else 
+                                                url_for('education') if section_name == 'education' else 
+                                                url_for('documents') 
+                                            }}" class="btn btn-sm btn-outline-primary">
+                                                {% if section_data.status == 'Complete' %}
+                                                    Update
+                                                {% elif section_data.status == 'In progress' %}
+                                                    Continue
+                                                {% else %}
+                                                    Start
+                                                {% endif %}
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <i class="fas fa-file-alt text-primary mr-2"></i>Document Status
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-file-pdf text-danger mr-2"></i>Resume
+                                </h6>
+                                <span class="badge {{ 'badge-success' if has_resume else 'badge-warning' }}">
+                                    {{ 'Uploaded' if has_resume else 'Not Uploaded' }}
+                                </span>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar {{ 'bg-success' if has_resume else 'bg-warning' }}" role="progressbar" style="width: {{ '100%' if has_resume else '0%' }};" aria-valuenow="{{ '100' if has_resume else '0' }}" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <div class="mt-2">
+                                <a href="{{ url_for('documents') }}" class="btn btn-sm btn-outline-primary">
+                                    {{ 'Update' if has_resume else 'Upload' }}
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-file-word text-primary mr-2"></i>Cover Letter
+                                </h6>
+                                <span class="badge {{ 'badge-success' if has_cover_letter else 'badge-warning' }}">
+                                    {{ 'Uploaded' if has_cover_letter else 'Not Uploaded' }}
+                                </span>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar {{ 'bg-success' if has_cover_letter else 'bg-warning' }}" role="progressbar" style="width: {{ '100%' if has_cover_letter else '0%' }};" aria-valuenow="{{ '100' if has_cover_letter else '0' }}" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <div class="mt-2">
+                                <a href="{{ url_for('documents') }}" class="btn btn-sm btn-outline-primary">
+                                    {{ 'Update' if has_cover_letter else 'Upload' }}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history text-primary mr-2"></i>Recent Applications
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if recent_applications and recent_applications|length > 0 %}
+                            {% for app in recent_applications %}
+                                <div class="mb-3 {% if not loop.last %}border-bottom pb-3{% endif %}">
+                                    <h6 class="mb-1">{{ app.title }}</h6>
+                                    <div class="small text-muted mb-2">
+                                        <i class="fas fa-calendar-alt mr-1"></i>{{ app.date }}
+                                    </div>
+                                    <div class="d-flex">
+                                        <a href="{{ app.url }}" target="_blank" class="btn btn-sm btn-outline-primary mr-2">
+                                            <i class="fas fa-external-link-alt mr-1"></i>Visit
+                                        </a>
+                                        <a href="{{ url_for('autofill') }}?job_url={{ app.url }}" class="btn btn-sm btn-outline-success">
+                                            <i class="fas fa-magic mr-1"></i>Autofill Again
+                                        </a>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            <div class="text-center mt-3">
+                                <a href="{{ url_for('autofill') }}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-history mr-1"></i>View All Applications
+                                </a>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle mr-2"></i>You haven't used the autofill feature yet.
+                            </div>
+                            <div class="text-center">
+                                <a href="{{ url_for('autofill') }}" class="btn btn-primary">
+                                    <i class="fas fa-magic mr-2"></i>Start Autofilling Applications
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">
+                    <i class="fas fa-rocket text-primary mr-2"></i>Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <a href="{{ url_for('profile') }}" class="btn btn-outline-primary btn-block py-3">
+                            <i class="fas fa-id-card fa-2x mb-2 d-block mx-auto"></i>
+                            Update Profile
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{{ url_for('documents') }}" class="btn btn-outline-primary btn-block py-3">
+                            <i class="fas fa-file-upload fa-2x mb-2 d-block mx-auto"></i>
+                            Upload Documents
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{{ url_for('autofill') }}" class="btn btn-outline-primary btn-block py-3">
+                            <i class="fas fa-magic fa-2x mb-2 d-block mx-auto"></i>
+                            Autofill Application
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    .progress-circle circle {
+        transform: rotate(-90deg);
+        transform-origin: 50% 50%;
+        transition: stroke-dashoffset 0.5s ease;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Job Application Autofill",
+  "version": "1.0",
+  "description": "Automatically fill job applications using your stored profile data",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*.indeed.com/*",
+    "*://*.linkedin.com/*",
+    "*://*.glassdoor.com/*",
+    "*://*.monster.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/icon16.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "images/icon16.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  },
+  "background": {
+    "service_worker": "js/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.indeed.com/*",
+        "*://*.linkedin.com/*",
+        "*://*.glassdoor.com/*",
+        "*://*.monster.com/*"
+      ],
+      "js": ["js/content.js"],
+      "css": ["css/content.css"]
+    }
+  ]
+} 

@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+
+{% block title %}Autofilling Job Application - Job Application Autofill{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-10 offset-md-1">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-magic mr-2"></i>Autofilling Job Application
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <h5>Ready to autofill your application at:</h5>
+                        <p class="text-primary font-weight-bold">{{ job_url }}</p>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <h5><i class="fas fa-info-circle mr-2"></i>How to Autofill Your Application</h5>
+                        
+                        <div id="mobile-instructions">
+                            <p>Since Safari mobile has restrictions on running scripts, we'll use a different approach:</p>
+                            
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <h5 class="mb-0">Step 1: Open the Job Application</h5>
+                                </div>
+                                <div class="card-body">
+                                    <p>First, open the job application in a new tab:</p>
+                                    <div class="text-center my-3">
+                                        <a href="{{ job_url }}" class="btn btn-lg btn-primary" target="_blank" id="open-job-btn">
+                                            <i class="fas fa-external-link-alt mr-2"></i>Open Job Application
+                                        </a>
+                                    </div>
+                                    <p class="text-muted small">Keep this tab open to reference your information.</p>
+                                </div>
+                            </div>
+                            
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <h5 class="mb-0">Step 2: Copy Your Information</h5>
+                                </div>
+                                <div class="card-body">
+                                    <p>Below is your information organized by field type. Tap on any value to copy it to your clipboard:</p>
+                                    
+                                    <div class="accordion" id="infoAccordion">
+                                        <!-- Personal Information -->
+                                        <div class="card">
+                                            <div class="card-header" id="personalInfoHeading">
+                                                <h5 class="mb-0">
+                                                    <button class="btn btn-link" type="button" data-toggle="collapse" data-target="#personalInfoCollapse" aria-expanded="true" aria-controls="personalInfoCollapse">
+                                                        <i class="fas fa-user mr-2"></i>Personal Information
+                                                    </button>
+                                                </h5>
+                                            </div>
+                                            <div id="personalInfoCollapse" class="collapse show" aria-labelledby="personalInfoHeading" data-parent="#infoAccordion">
+                                                <div class="card-body">
+                                                    <table class="table table-sm">
+                                                        <tbody>
+                                                            {% for key, value in personal_info.items() %}
+                                                                {% if value %}
+                                                                <tr>
+                                                                    <th>{{ key|replace('_', ' ')|title }}</th>
+                                                                    <td><button class="btn btn-sm btn-outline-primary copy-btn" data-value="{{ value }}">{{ value }} <i class="fas fa-copy ml-1"></i></button></td>
+                                                                </tr>
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Employment History -->
+                                        {% if employment_history and employment_history|length > 0 %}
+                                        <div class="card">
+                                            <div class="card-header" id="employmentHeading">
+                                                <h5 class="mb-0">
+                                                    <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#employmentCollapse" aria-expanded="false" aria-controls="employmentCollapse">
+                                                        <i class="fas fa-briefcase mr-2"></i>Employment History
+                                                    </button>
+                                                </h5>
+                                            </div>
+                                            <div id="employmentCollapse" class="collapse" aria-labelledby="employmentHeading" data-parent="#infoAccordion">
+                                                <div class="card-body">
+                                                    <table class="table table-sm">
+                                                        <tbody>
+                                                            {% for key, value in employment_history[0].items() %}
+                                                                {% if value and key != 'id' and key != 'current_job' %}
+                                                                <tr>
+                                                                    <th>{{ key|replace('_', ' ')|title }}</th>
+                                                                    <td><button class="btn btn-sm btn-outline-primary copy-btn" data-value="{{ value }}">{{ value }} <i class="fas fa-copy ml-1"></i></button></td>
+                                                                </tr>
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <!-- Education -->
+                                        {% if education_history and education_history|length > 0 %}
+                                        <div class="card">
+                                            <div class="card-header" id="educationHeading">
+                                                <h5 class="mb-0">
+                                                    <button class="btn btn-link collapsed" type="button" data-toggle="collapse" data-target="#educationCollapse" aria-expanded="false" aria-controls="educationCollapse">
+                                                        <i class="fas fa-graduation-cap mr-2"></i>Education
+                                                    </button>
+                                                </h5>
+                                            </div>
+                                            <div id="educationCollapse" class="collapse" aria-labelledby="educationHeading" data-parent="#infoAccordion">
+                                                <div class="card-body">
+                                                    <table class="table table-sm">
+                                                        <tbody>
+                                                            {% for key, value in education_history[0].items() %}
+                                                                {% if value and key != 'id' and key != 'current_education' %}
+                                                                <tr>
+                                                                    <th>{{ key|replace('_', ' ')|title }}</th>
+                                                                    <td><button class="btn btn-sm btn-outline-primary copy-btn" data-value="{{ value }}">{{ value }} <i class="fas fa-copy ml-1"></i></button></td>
+                                                                </tr>
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h5 class="mb-0">Step 3: Fill Out the Application</h5>
+                                </div>
+                                <div class="card-body">
+                                    <p>In the job application tab:</p>
+                                    <ol>
+                                        <li>Tap on a field you want to fill</li>
+                                        <li>Come back to this tab and copy the corresponding information</li>
+                                        <li>Return to the application tab and paste the information</li>
+                                        <li>Repeat for each field</li>
+                                    </ol>
+                                    <div class="alert alert-warning">
+                                        <strong>Tip:</strong> On iOS, you can quickly switch between tabs by tapping and holding the tabs button in the bottom right corner of Safari, then selecting the tab you want.
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info mt-3">
+                                <strong>Note:</strong> For a true autofill experience like Capital One Shopping or Rakuten, we would need to develop a native iOS app with a Safari extension. This web prototype demonstrates the concept but has limitations due to Safari's security restrictions.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-4">
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary mr-2">
+                            <i class="fas fa-home mr-2"></i>Return to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set up copy buttons
+        document.querySelectorAll('.copy-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const textToCopy = this.getAttribute('data-value');
+                const tempInput = document.createElement('input');
+                tempInput.value = textToCopy;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                
+                try {
+                    const successful = document.execCommand('copy');
+                    const originalText = this.innerHTML;
+                    
+                    if (successful) {
+                        this.innerHTML = '<i class="fas fa-check mr-1"></i> Copied!';
+                        this.classList.remove('btn-outline-primary');
+                        this.classList.add('btn-success');
+                        
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                            this.classList.remove('btn-success');
+                            this.classList.add('btn-outline-primary');
+                        }, 2000);
+                    }
+                } catch (err) {
+                    console.error('Could not copy text: ', err);
+                    alert('Could not copy to clipboard. Please select and copy the text manually.');
+                }
+                
+                document.body.removeChild(tempInput);
+            });
+        });
+    });
+</script>
+{% endblock %} 
