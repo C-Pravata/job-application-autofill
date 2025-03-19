@@ -311,12 +311,12 @@ document.addEventListener('DOMContentLoaded', function() {
       console.log('Using demo profile data:', profileData);
       
       if (statusElement) {
-        statusElement.textContent = 'Using demo data (Michael Jordan)';
+        statusElement.textContent = 'Ready to analyze form fields';
         statusElement.className = 'status info';
       }
       
       if (connectionStatus) {
-        connectionStatus.textContent = 'Using demo data';
+        connectionStatus.textContent = 'Michael Jordan (Demo Profile)';
         connectionStatus.className = 'status-indicator demo';
       }
     } else if (appData) {
@@ -325,7 +325,7 @@ document.addEventListener('DOMContentLoaded', function() {
       console.log('Using app profile data:', profileData);
       
       if (statusElement) {
-        statusElement.textContent = 'Using your profile data';
+        statusElement.textContent = 'Ready to analyze form fields';
         statusElement.className = 'status info';
       }
     } else {
@@ -334,8 +334,8 @@ document.addEventListener('DOMContentLoaded', function() {
       console.log('App data not available, falling back to demo data');
       
       if (statusElement) {
-        statusElement.textContent = 'App data not available, using demo data';
-        statusElement.className = 'status warning';
+        statusElement.textContent = 'Web app unavailable, using demo profile';
+        statusElement.className = 'status info';
       }
       
       if (useDemoDataToggle && !useDemoDataToggle.checked) {
@@ -344,7 +344,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       if (connectionStatus) {
-        connectionStatus.textContent = 'Using demo data (app unavailable)';
+        connectionStatus.textContent = 'Michael Jordan (Demo Profile)';
         connectionStatus.className = 'status-indicator demo';
       }
     }
