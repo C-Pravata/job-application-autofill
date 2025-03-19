@@ -3,6 +3,7 @@ body {
   width: 300px;
   padding: 15px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  margin: 0;
 }
 
 .container {
@@ -24,6 +25,8 @@ h1 {
   font-size: 14px;
   text-align: center;
   margin-bottom: 10px;
+  background-color: #f8f9fa;
+  color: #6c757d;
 }
 
 .status-indicator.connected {
@@ -36,8 +39,13 @@ h1 {
   color: #c62828;
 }
 
+.status-indicator.demo {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
 .form-group {
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 
 .toggle-switch {
@@ -49,6 +57,11 @@ h1 {
 
 .toggle-switch input {
   display: none;
+}
+
+.toggle-switch .label {
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .slider {
@@ -80,10 +93,15 @@ input:checked + .slider:before {
   transform: translateX(20px);
 }
 
+/* Special styling for demo data toggle */
+#useDemoData + .slider {
+  background-color: #ff9800;
+}
+
 .button-group {
   display: flex;
   gap: 10px;
-  margin-bottom: 15px;
+  margin: 10px 0;
 }
 
 button {
@@ -96,26 +114,26 @@ button {
   transition: background-color 0.3s;
 }
 
-#analyzeForm {
+.btn-primary {
   background-color: #2196F3;
   color: white;
 }
 
-#analyzeForm:hover {
+.btn-primary:hover {
   background-color: #1976D2;
 }
 
-#autofill {
+.btn-success {
   background-color: #4CAF50;
   color: white;
 }
 
-#autofill:hover {
+.btn-success:hover {
   background-color: #388E3C;
 }
 
-#autofill:disabled {
-  background-color: #ccc;
+button:disabled {
+  background-color: #ccc !important;
   cursor: not-allowed;
 }
 
@@ -125,6 +143,32 @@ button {
   font-size: 14px;
   text-align: center;
   min-height: 20px;
+  background-color: #f8f9fa;
+  color: #495057;
+}
+
+.info {
+  color: #055160;
+  background-color: #cff4fc;
+  border: 1px solid #b6effb;
+}
+
+.success {
+  color: #0f5132;
+  background-color: #d1e7dd;
+  border: 1px solid #badbcc;
+}
+
+.warning {
+  color: #664d03;
+  background-color: #fff3cd;
+  border: 1px solid #ffecb5;
+}
+
+.error {
+  color: #842029;
+  background-color: #f8d7da;
+  border: 1px solid #f5c2c7;
 }
 
 .footer {
@@ -134,13 +178,21 @@ button {
   padding-top: 15px;
 }
 
-.footer a {
+.btn-outline {
   color: #2196F3;
   text-decoration: none;
+  border: 1px solid #2196F3;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.3s;
+  display: inline-block;
 }
 
-.footer a:hover {
-  text-decoration: underline;
+.btn-outline:hover {
+  background-color: #2196F3;
+  color: white;
+  text-decoration: none;
 }
 
 /* Form styling */
