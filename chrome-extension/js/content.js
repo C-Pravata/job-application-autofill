@@ -124,7 +124,10 @@ function findMatchingProfileValue(field, profileData) {
         address: /address|street/i,
         city: /city|town/i,
         state: /state|province/i,
-        zip: /zip|postal|postcode/i
+        zip: /zip|postal|postcode/i,
+        linkedin: /linkedin|social.*profile/i,
+        website: /website|portfolio|personal.*site/i,
+        summary: /summary|profile|about|objective/i
     };
     
     // Check field identifiers
@@ -135,7 +138,38 @@ function findMatchingProfileValue(field, profileData) {
             (field.automationId && pattern.test(field.automationId)) ||
             (field.label && pattern.test(field.label))
         ) {
-            return profileData[key] || null;
+            // Return the corresponding value from profileData
+            return profileData[key] || '';
+        }
+    }
+    
+    // Check for employment history fields
+    if (profileData.employment && profileData.employment.length > 0) {
+        const mostRecent = profileData.employment[0];
+        
+        if (/company|employer|organization/i.test(field.label || field.name || field.id || '')) {
+            return mostRecent.company || '';
+        }
+        if (/title|position|role/i.test(field.label || field.name || field.id || '')) {
+            return mostRecent.job_title || '';
+        }
+        if (/responsibilities|duties|description/i.test(field.label || field.name || field.id || '')) {
+            return mostRecent.responsibilities || '';
+        }
+    }
+    
+    // Check for education fields
+    if (profileData.education && profileData.education.length > 0) {
+        const mostRecent = profileData.education[0];
+        
+        if (/school|university|college|institution/i.test(field.label || field.name || field.id || '')) {
+            return mostRecent.school || '';
+        }
+        if (/degree|qualification/i.test(field.label || field.name || field.id || '')) {
+            return mostRecent.degree || '';
+        }
+        if (/major|field.*study|concentration/i.test(field.label || field.name || field.id || '')) {
+            return mostRecent.field_of_study || '';
         }
     }
     
