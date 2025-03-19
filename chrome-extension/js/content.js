@@ -20,13 +20,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('Content script received message:', request);
     
     if (request.action === 'ANALYZE_FORM') {
-        const fields = analyzeFormFields(request.isWorkday);
-        console.log('Analyzed fields:', fields);
-        sendResponse({ fields });
+        try {
+            const fields = analyzeFormFields(request.isWorkday);
+            console.log('Analyzed fields:', fields);
+            sendResponse({ fields: fields });
+        } catch (error) {
+            console.error('Error analyzing form:', error);
+            sendResponse({ error: error.message });
+        }
     } else if (request.action === 'AUTOFILL_FORM') {
-        const result = autofillForm(request.profile, request.isWorkday);
-        console.log('Autofill result:', result);
-        sendResponse(result);
+        try {
+            const result = autofillForm(request.profile, request.isWorkday);
+            console.log('Autofill result:', result);
+            sendResponse(result);
+        } catch (error) {
+            console.error('Error autofilling form:', error);
+            sendResponse({ success: false, error: error.message });
+        }
     }
     return true;
 });
@@ -37,6 +47,8 @@ function analyzeFormFields(isWorkday) {
     
     // Find all input elements
     const inputs = document.querySelectorAll('input, select, textarea');
+    console.log(`Found ${inputs.length} total input elements on the page`);
+    
     inputs.forEach(input => {
         // Skip hidden fields
         if (input.type === 'hidden' || !isVisible(input)) {
@@ -60,7 +72,8 @@ function isInputRelevant(fieldInfo) {
     }
     
     // Skip fields with no identifiers
-    if (!fieldInfo.id && !fieldInfo.name && !fieldInfo.label && !fieldInfo.automationId && !fieldInfo.fkitId) {
+    if (!fieldInfo.id && !fieldInfo.name && !fieldInfo.label && 
+        !fieldInfo.automationId && !fieldInfo.fkitId && !fieldInfo.placeholder) {
         return false;
     }
     
@@ -80,6 +93,9 @@ function extractFieldInfo(element, isWorkday) {
         placeholder: element.getAttribute('placeholder') || '',
         isWorkday: isWorkday
     };
+    
+    // Debug log
+    console.log(`Found field: type=${fieldInfo.type}, id=${fieldInfo.id}, name=${fieldInfo.name}, label=${fieldInfo.label}`);
     
     // For Workday forms, look for specific patterns
     if (isWorkday) {
@@ -207,6 +223,12 @@ function isVisible(element) {
 
 function autofillForm(profile, isWorkday) {
     console.log('Starting autofill with profile:', profile);
+    
+    if (!profile || !profile.personal) {
+        console.error('Invalid profile data:', profile);
+        return { success: false, error: 'Invalid profile data', filledCount: 0 };
+    }
+    
     let filledCount = 0;
     
     // Create status overlay
@@ -214,15 +236,26 @@ function autofillForm(profile, isWorkday) {
     
     // Analyze fields
     const fields = analyzeFormFields(isWorkday);
+    if (fields.length === 0) {
+        overlay.textContent = 'No fields found to fill';
+        setTimeout(() => overlay.remove(), 3000);
+        return { success: true, filledCount: 0, message: 'No fields found' };
+    }
     
     // Process each field
     fields.forEach((field, index) => {
         setTimeout(() => {
-            const value = findMatchingProfileValue(field, profile, isWorkday);
-            if (value !== null && value !== '') {
-                fillField(field.element, value);
-                filledCount++;
-                updateStatusOverlay(overlay, filledCount, fields.length);
+            try {
+                const value = findMatchingProfileValue(field, profile, isWorkday);
+                if (value !== null && value !== '') {
+                    const success = fillField(field.element, value);
+                    if (success) {
+                        filledCount++;
+                        updateStatusOverlay(overlay, filledCount, fields.length);
+                    }
+                }
+            } catch (error) {
+                console.error('Error filling field:', error, field);
             }
         }, index * 150); // Stagger the fills with a slightly longer delay
     });
@@ -230,9 +263,9 @@ function autofillForm(profile, isWorkday) {
     // Remove overlay after completion
     setTimeout(() => {
         overlay.remove();
-    }, (fields.length * 150) + 1500);
+    }, (fields.length * 150) + 2000);
     
-    return { success: true, filledCount };
+    return { success: true, filledCount, totalFields: fields.length };
 }
 
 function createStatusOverlay() {
@@ -252,6 +285,7 @@ function createStatusOverlay() {
         border-left: 4px solid #2196F3;
     `;
     document.body.appendChild(overlay);
+    overlay.textContent = 'Job Autofill: Starting...';
     return overlay;
 }
 
@@ -262,6 +296,7 @@ function updateStatusOverlay(overlay, current, total) {
 function findMatchingProfileValue(field, profile, isWorkday) {
     // Skip fields that already have values
     if (field.element.value) {
+        console.log(`Skipping field with existing value: ${field.element.value}`);
         return null;
     }
     
@@ -278,13 +313,17 @@ function findMatchingProfileValue(field, profile, isWorkday) {
         field.fieldGroup
     ].filter(Boolean).map(id => id.toLowerCase());
     
-    console.log('Field identifiers:', identifiers);
+    // Debug logging
+    if (identifiers.length > 0) {
+        console.log('Field identifiers for matching:', identifiers);
+    }
     
     // First name
     if (matchesPattern(identifiers, [
         'first name', 'firstname', 'first-name', 'given name', 'given-name', 'fname',
         'legalname--firstname', 'name--first', 'first_name'
     ])) {
+        console.log(`Found match: firstName = ${profile.personal.firstName}`);
         return profile.personal.firstName;
     }
     
@@ -293,14 +332,25 @@ function findMatchingProfileValue(field, profile, isWorkday) {
         'last name', 'lastname', 'last-name', 'family name', 'family-name', 'lname', 'surname',
         'legalname--lastname', 'name--last', 'last_name'
     ])) {
+        console.log(`Found match: lastName = ${profile.personal.lastName}`);
         return profile.personal.lastName;
+    }
+    
+    // Full name
+    if (matchesPattern(identifiers, [
+        'full name', 'fullname', 'full-name', 'name', 'complete name'
+    ])) {
+        const fullName = `${profile.personal.firstName} ${profile.personal.lastName}`;
+        console.log(`Found match: fullName = ${fullName}`);
+        return fullName;
     }
     
     // Email
     if (matchesPattern(identifiers, [
         'email', 'e-mail', 'emailaddress', 'email address', 'email-address',
-        'contact--email', 'workday.email'
+        'contact--email', 'workday.email', 'mail'
     ])) {
+        console.log(`Found match: email = ${profile.personal.email}`);
         return profile.personal.email;
     }
     
@@ -309,6 +359,7 @@ function findMatchingProfileValue(field, profile, isWorkday) {
         'phone', 'telephone', 'phone number', 'phonenumber', 'phone-number', 'mobile', 'cell',
         'contact--phone', 'workphone', 'mobile-phone', 'cell-phone'
     ])) {
+        console.log(`Found match: phone = ${profile.personal.phone}`);
         return profile.personal.phone;
     }
     
@@ -317,6 +368,7 @@ function findMatchingProfileValue(field, profile, isWorkday) {
         'address', 'street', 'street address', 'address line 1', 'addressline1',
         'streetaddress', 'address1', 'address--line1', 'location--address'
     ]) && !matchesPattern(identifiers, ['email', 'mail'])) {
+        console.log(`Found match: address = ${profile.personal.address}`);
         return profile.personal.address;
     }
     
@@ -325,6 +377,7 @@ function findMatchingProfileValue(field, profile, isWorkday) {
         'linkedin', 'linked-in', 'linkedinurl', 'linkedin url', 'linkedin-url',
         'socialmedia--linkedin', 'social-linkedin'
     ])) {
+        console.log(`Found match: linkedin = ${profile.personal.linkedin}`);
         return profile.personal.linkedin;
     }
     
@@ -333,6 +386,7 @@ function findMatchingProfileValue(field, profile, isWorkday) {
         'website', 'web site', 'personal website', 'portfolio', 'web-site',
         'personalsite', 'personal-site'
     ])) {
+        console.log(`Found match: website = ${profile.personal.website}`);
         return profile.personal.website;
     }
     
@@ -345,6 +399,7 @@ function findMatchingProfileValue(field, profile, isWorkday) {
             'company', 'employer', 'organization', 'company name', 'employer name',
             'workplace', 'business', 'firm'
         ])) {
+            console.log(`Found match: company = ${mostRecent.company}`);
             return mostRecent.company;
         }
         
@@ -353,6 +408,7 @@ function findMatchingProfileValue(field, profile, isWorkday) {
             'job title', 'jobtitle', 'position', 'title', 'role', 'job-title',
             'occupation', 'job_title', 'job role', 'job position'
         ])) {
+            console.log(`Found match: position = ${mostRecent.position}`);
             return mostRecent.position;
         }
     }
@@ -366,6 +422,7 @@ function findMatchingProfileValue(field, profile, isWorkday) {
             'school', 'university', 'college', 'institution', 'school name',
             'university name', 'educational institution', 'alma mater'
         ])) {
+            console.log(`Found match: school = ${mostRecent.school}`);
             return mostRecent.school;
         }
         
@@ -374,6 +431,7 @@ function findMatchingProfileValue(field, profile, isWorkday) {
             'degree', 'qualification', 'academic degree', 'diploma', 'certificate',
             'degree name', 'degree-earned', 'degree_name'
         ])) {
+            console.log(`Found match: degree = ${mostRecent.degree}`);
             return mostRecent.degree;
         }
         
@@ -382,10 +440,12 @@ function findMatchingProfileValue(field, profile, isWorkday) {
             'field of study', 'field-of-study', 'major', 'concentration', 'study field',
             'specialization', 'subject', 'discipline', 'field_of_study'
         ])) {
+            console.log(`Found match: fieldOfStudy = ${mostRecent.fieldOfStudy}`);
             return mostRecent.fieldOfStudy;
         }
     }
     
+    // No match found
     return null;
 }
 
@@ -403,39 +463,58 @@ function matchesPattern(identifiers, patterns) {
 
 function fillField(element, value) {
     // Skip empty values
-    if (!value) return;
+    if (!value) return false;
     
-    // Add highlight class
-    element.classList.add('job-autofill-highlight');
-    
-    // Handle different input types
-    if (element.tagName === 'SELECT') {
-        // Try to find matching option
-        for (let option of element.options) {
-            if (option.text.toLowerCase().includes(value.toLowerCase()) || 
-                option.value.toLowerCase().includes(value.toLowerCase())) {
-                element.value = option.value;
-                break;
-            }
-        }
-    } else {
-        // Set value for regular inputs
-        element.value = value;
-    }
-    
-    // Trigger events to properly update the field
-    ['input', 'change', 'blur', 'keyup'].forEach(eventType => {
-        element.dispatchEvent(new Event(eventType, { bubbles: true }));
-    });
-    
-    // Remove highlight and show success after delay
-    setTimeout(() => {
-        element.classList.remove('job-autofill-highlight');
-        element.classList.add('job-autofill-success');
+    try {
+        // Add highlight class
+        element.classList.add('job-autofill-highlight');
         
-        // Remove success class after animation
+        // Handle different input types
+        if (element.tagName === 'SELECT') {
+            // Try to find matching option for selects
+            let matched = false;
+            for (let option of element.options) {
+                if (option.text.toLowerCase().includes(value.toLowerCase()) || 
+                    option.value.toLowerCase().includes(value.toLowerCase())) {
+                    element.value = option.value;
+                    matched = true;
+                    break;
+                }
+            }
+            // If no direct match, try to set value directly
+            if (!matched) {
+                element.value = value;
+            }
+        } else {
+            // Set value for regular inputs
+            element.value = value;
+        }
+        
+        // Trigger multiple events to properly update the field
+        const events = ['input', 'change', 'blur', 'keyup'];
+        events.forEach(eventType => {
+            try {
+                const event = new Event(eventType, { bubbles: true });
+                element.dispatchEvent(event);
+            } catch (e) {
+                console.error(`Error dispatching ${eventType} event:`, e);
+            }
+        });
+        
+        // Remove highlight and show success after delay
         setTimeout(() => {
-            element.classList.remove('job-autofill-success');
-        }, 1000);
-    }, 500);
+            element.classList.remove('job-autofill-highlight');
+            element.classList.add('job-autofill-success');
+            
+            // Remove success class after animation
+            setTimeout(() => {
+                element.classList.remove('job-autofill-success');
+            }, 1000);
+        }, 500);
+        
+        return true;
+    } catch (error) {
+        console.error('Error filling field:', error, element);
+        return false;
+    }
 } 

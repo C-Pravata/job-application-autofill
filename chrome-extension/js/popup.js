@@ -55,8 +55,8 @@ const COMMON_FIELD_MAPPINGS = {
 // Sample profile data for demo
 const DEMO_PROFILE = {
   personal: {
-    firstName: "Michael",  // Updated to user's requested name
-    lastName: "Jordan",    // Updated to user's requested name
+    firstName: "Michael",
+    lastName: "Jordan",
     email: "michael.jordan@example.com",
     phone: "555-123-4567",
     address: "123 Main St, Anytown, CA 12345",
@@ -147,24 +147,36 @@ document.addEventListener('DOMContentLoaded', function() {
   initializeUI();
   
   // Add event listeners for buttons
-  analyzeFormBtn.addEventListener('click', function() {
-    handleAnalyzeForm();
-  });
+  if (analyzeFormBtn) {
+    analyzeFormBtn.addEventListener('click', handleAnalyzeForm);
+    console.log('Added event listener to Analyze Form button');
+  } else {
+    console.error('Could not find Analyze Form button');
+  }
   
-  autofillBtn.addEventListener('click', function() {
-    handleAutofill();
-  });
+  if (autofillBtn) {
+    autofillBtn.addEventListener('click', handleAutofill);
+    console.log('Added event listener to Autofill button');
+  } else {
+    console.error('Could not find Autofill button');
+  }
   
   // Add event listener for data source toggle
-  useDemoDataToggle.addEventListener('change', function() {
-    chrome.storage.local.set({ 'useDemoData': useDemoDataToggle.checked });
-    updateSelectedProfileData();
-  });
+  if (useDemoDataToggle) {
+    useDemoDataToggle.addEventListener('change', function() {
+      chrome.storage.local.set({ 'useDemoData': useDemoDataToggle.checked });
+      updateSelectedProfileData();
+      console.log('Demo data toggle changed:', useDemoDataToggle.checked);
+    });
+  }
   
   // Add event listener for workday mode toggle
-  workdayModeToggle.addEventListener('change', function() {
-    chrome.storage.local.set({ 'workdayMode': workdayModeToggle.checked });
-  });
+  if (workdayModeToggle) {
+    workdayModeToggle.addEventListener('change', function() {
+      chrome.storage.local.set({ 'workdayMode': workdayModeToggle.checked });
+      console.log('Workday mode toggle changed:', workdayModeToggle.checked);
+    });
+  }
   
   // Load saved preferences
   chrome.storage.local.get(['useDemoData', 'workdayMode'], function(result) {
@@ -174,18 +186,23 @@ document.addEventListener('DOMContentLoaded', function() {
     if (result.workdayMode !== undefined) {
       workdayModeToggle.checked = result.workdayMode;
     }
+    console.log('Loaded saved preferences:', result);
   });
   
   // Function to initialize UI and fetch profile data
   async function initializeUI() {
     // Always start with demo data available
     profileData = DEMO_PROFILE;
+    console.log('Set default demo profile data');
     
     try {
       // Try to fetch profile data from Flask app
+      console.log('Fetching profile data from API...');
       const response = await fetch(`${API_BASE_URL}/api/profile`);
       if (response.ok) {
         const data = await response.json();
+        console.log('Received profile data from API:', data);
+        
         appProfileData = {
           personal: {
             firstName: data.firstName || '',
@@ -196,9 +213,32 @@ document.addEventListener('DOMContentLoaded', function() {
             linkedin: data.linkedin || '',
             website: data.website || ''
           },
-          employment: data.employment || [],
-          education: data.education || []
+          workExperience: [],
+          education: []
         };
+        
+        // Convert employment to workExperience format
+        if (data.employment && data.employment.length > 0) {
+          appProfileData.workExperience = data.employment.map(job => ({
+            company: job.company || '',
+            position: job.job_title || '',
+            startDate: job.start_date || '',
+            endDate: job.end_date || '',
+            description: job.responsibilities || ''
+          }));
+        }
+        
+        // Convert education to the right format
+        if (data.education && data.education.length > 0) {
+          appProfileData.education = data.education.map(edu => ({
+            school: edu.institution || '',
+            degree: edu.degree || '',
+            fieldOfStudy: edu.field_of_study || '',
+            startDate: edu.start_date || '',
+            endDate: edu.end_date || '',
+            gpa: edu.gpa || ''
+          }));
+        }
         
         connectionStatus.textContent = 'Connected to web app';
         connectionStatus.className = 'status-indicator connected';
@@ -220,22 +260,25 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Update which profile data is being used based on toggle
   function updateSelectedProfileData() {
-    if (useDemoDataToggle.checked) {
+    if (useDemoDataToggle && useDemoDataToggle.checked) {
       // Use demo data
       profileData = DEMO_PROFILE;
-      status.textContent = 'Using demo data';
-      status.className = 'info';
+      if (status) status.textContent = 'Using demo data';
+      if (status) status.className = 'status info';
+      console.log('Using demo profile data');
     } else if (appProfileData) {
       // Use app data
       profileData = appProfileData;
-      status.textContent = 'Using your profile data';
-      status.className = 'info';
+      if (status) status.textContent = 'Using your profile data';
+      if (status) status.className = 'status info';
+      console.log('Using app profile data');
     } else {
       // If app data is not available, fall back to demo even if toggle is off
       profileData = DEMO_PROFILE;
-      status.textContent = 'App data not available, using demo data';
-      status.className = 'warning';
-      useDemoDataToggle.checked = true;
+      if (status) status.textContent = 'App data not available, using demo data';
+      if (status) status.className = 'status warning';
+      if (useDemoDataToggle) useDemoDataToggle.checked = true;
+      console.log('Falling back to demo data');
     }
     
     console.log('Active profile data:', profileData);
@@ -243,29 +286,52 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Handle analyze form button click
   function handleAnalyzeForm() {
+    console.log('Analyze Form button clicked');
+    if (!status) {
+      console.error('Status element not found');
+      return;
+    }
+    
     status.textContent = 'Analyzing form fields...';
-    status.className = 'info';
+    status.className = 'status info';
     
     chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+      if (!tabs || tabs.length === 0) {
+        console.error('No active tab found');
+        status.textContent = 'Error: Could not find active tab';
+        status.className = 'status error';
+        return;
+      }
+      
+      console.log('Sending message to tab:', tabs[0].id);
       chrome.tabs.sendMessage(
         tabs[0].id,
         { 
           action: 'ANALYZE_FORM',
-          isWorkday: workdayModeToggle.checked
+          isWorkday: workdayModeToggle ? workdayModeToggle.checked : true
         },
         function(response) {
           if (chrome.runtime.lastError) {
-            status.textContent = 'Error: Could not connect to page';
-            status.className = 'error';
+            console.error('Runtime error:', chrome.runtime.lastError);
+            status.textContent = 'Error: Could not connect to page. Make sure to reload the page.';
+            status.className = 'status error';
             return;
           }
           
-          if (response && response.fields) {
+          if (!response) {
+            console.error('No response from content script');
+            status.textContent = 'No response from page. Try reloading the page.';
+            status.className = 'status warning';
+            return;
+          }
+          
+          console.log('Got response:', response);
+          if (response.fields && response.fields.length > 0) {
             status.textContent = `Found ${response.fields.length} fields. Ready to autofill.`;
-            status.className = 'success';
+            status.className = 'status success';
           } else {
-            status.textContent = 'No form fields found';
-            status.className = 'warning';
+            status.textContent = 'No form fields found. Make sure you are on a form page.';
+            status.className = 'status warning';
           }
         }
       );
@@ -274,33 +340,61 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Handle autofill button click
   function handleAutofill() {
+    console.log('Autofill button clicked');
+    if (!status) {
+      console.error('Status element not found');
+      return;
+    }
+    
     status.textContent = 'Filling form fields...';
-    status.className = 'info';
+    status.className = 'status info';
     
     // Make sure we have the correct profile data selected
     updateSelectedProfileData();
     
     chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+      if (!tabs || tabs.length === 0) {
+        console.error('No active tab found');
+        status.textContent = 'Error: Could not find active tab';
+        status.className = 'status error';
+        return;
+      }
+      
+      console.log('Sending autofill message with profile:', profileData);
       chrome.tabs.sendMessage(
         tabs[0].id,
         { 
           action: 'AUTOFILL_FORM',
           profile: profileData,
-          isWorkday: workdayModeToggle.checked
+          isWorkday: workdayModeToggle ? workdayModeToggle.checked : true
         },
         function(response) {
           if (chrome.runtime.lastError) {
-            status.textContent = 'Error: Could not connect to page';
-            status.className = 'error';
+            console.error('Runtime error:', chrome.runtime.lastError);
+            status.textContent = 'Error: Could not connect to page. Make sure to reload the page.';
+            status.className = 'status error';
             return;
           }
           
-          if (response && response.success) {
-            status.textContent = `Successfully filled ${response.filledCount} fields`;
-            status.className = 'success';
+          if (!response) {
+            console.error('No response from content script');
+            status.textContent = 'No response from page. Try reloading the page.';
+            status.className = 'status warning';
+            return;
+          }
+          
+          console.log('Got autofill response:', response);
+          if (response.success) {
+            if (response.filledCount > 0) {
+              status.textContent = `Successfully filled ${response.filledCount} fields`;
+              status.className = 'status success';
+            } else {
+              status.textContent = 'No fields were filled. Form fields might not match your profile data.';
+              status.className = 'status warning';
+            }
           } else {
-            status.textContent = 'Failed to fill form fields';
-            status.className = 'error';
+            status.textContent = 'Failed to fill form fields. Try reloading the page.';
+            status.className = 'status error';
           }
         }
       );
