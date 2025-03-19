@@ -547,5 +547,32 @@ def delete_application(app_id):
     flash('Application removed from history!', 'success')
     return redirect(url_for('autofill'))
 
+@app.route('/api/profile', methods=['GET'])
+def get_profile_api():
+    """API endpoint for the Chrome extension to fetch profile data"""
+    init_session_data()
+    
+    # Get the profile data from the session
+    profile_data = {
+        'firstName': session['personal_info'].get('first_name', ''),
+        'lastName': session['personal_info'].get('last_name', ''),
+        'email': session['personal_info'].get('email', ''),
+        'phone': session['personal_info'].get('phone', ''),
+        'address': session['personal_info'].get('address', ''),
+        'city': session['personal_info'].get('city', ''),
+        'state': session['personal_info'].get('state', ''),
+        'zip': session['personal_info'].get('zip', ''),
+        'linkedin': session['personal_info'].get('linkedin', ''),
+        'website': session['personal_info'].get('website', ''),
+        'summary': session['personal_info'].get('summary', ''),
+        'employment': session.get('employment_history', []),
+        'education': session.get('education', [])
+    }
+    
+    # Enable CORS for the Chrome extension
+    response = jsonify(profile_data)
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8080) 

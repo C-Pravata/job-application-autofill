@@ -130,75 +130,111 @@ const TEST_PASSWORD = 'password';
 
 // Initialize the popup when the DOM content is loaded
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('Popup initialized');
+  console.log('DOM fully loaded - initializing popup');
   
-  // Initialize elements
+  // Get correct references to DOM elements
   const connectionStatus = document.getElementById('connectionStatus');
   const useDemoDataToggle = document.getElementById('useDemoData');
   const workdayModeToggle = document.getElementById('workdayMode');
-  const analyzeFormBtn = document.getElementById('analyzeForm');
-  const autofillBtn = document.getElementById('autofill');
+  const analyzeFormBtn = document.getElementById('analyzeForm'); // Matches HTML ID
+  const autofillBtn = document.getElementById('autofill'); // Matches HTML ID
   const status = document.getElementById('status');
+  
+  // Debug element references
+  console.log('DOM Elements found:', {
+    connectionStatus: !!connectionStatus,
+    useDemoDataToggle: !!useDemoDataToggle,
+    workdayModeToggle: !!workdayModeToggle,
+    analyzeFormBtn: !!analyzeFormBtn,
+    autofillBtn: !!autofillBtn,
+    status: !!status
+  });
+  
+  if (!analyzeFormBtn || !autofillBtn) {
+    console.error('Critical buttons not found in the DOM!');
+    if (status) {
+      status.textContent = 'Extension error: UI elements not found';
+      status.className = 'status error';
+    }
+    return;
+  }
   
   // Set initial state
   let appProfileData = null;
   
-  // Initialize UI and fetch both profile data sources
+  // Initialize UI and fetch profile data
   initializeUI();
   
-  // Add event listeners for buttons
-  if (analyzeFormBtn) {
-    analyzeFormBtn.addEventListener('click', handleAnalyzeForm);
-    console.log('Added event listener to Analyze Form button');
-  } else {
-    console.error('Could not find Analyze Form button');
-  }
+  // Add click event listeners with proper debug logging
+  analyzeFormBtn.addEventListener('click', function() {
+    console.log('Analyze Form button clicked - direct handler');
+    handleAnalyzeForm();
+  });
   
-  if (autofillBtn) {
-    autofillBtn.addEventListener('click', handleAutofill);
-    console.log('Added event listener to Autofill button');
-  } else {
-    console.error('Could not find Autofill button');
-  }
+  autofillBtn.addEventListener('click', function() {
+    console.log('Autofill button clicked - direct handler');
+    handleAutofill();
+  });
   
   // Add event listener for data source toggle
   if (useDemoDataToggle) {
     useDemoDataToggle.addEventListener('change', function() {
-      chrome.storage.local.set({ 'useDemoData': useDemoDataToggle.checked });
-      updateSelectedProfileData();
-      console.log('Demo data toggle changed:', useDemoDataToggle.checked);
+      const isChecked = useDemoDataToggle.checked;
+      console.log('Demo data toggle changed:', isChecked);
+      chrome.storage.local.set({ 'useDemoData': isChecked });
+      updateSelectedProfileData(isChecked, appProfileData, DEMO_PROFILE, status);
     });
   }
   
   // Add event listener for workday mode toggle
   if (workdayModeToggle) {
     workdayModeToggle.addEventListener('change', function() {
-      chrome.storage.local.set({ 'workdayMode': workdayModeToggle.checked });
-      console.log('Workday mode toggle changed:', workdayModeToggle.checked);
+      const isChecked = workdayModeToggle.checked;
+      console.log('Workday mode toggle changed:', isChecked);
+      chrome.storage.local.set({ 'workdayMode': isChecked });
     });
   }
   
   // Load saved preferences
   chrome.storage.local.get(['useDemoData', 'workdayMode'], function(result) {
-    if (result.useDemoData !== undefined) {
-      useDemoDataToggle.checked = result.useDemoData;
-    }
-    if (result.workdayMode !== undefined) {
-      workdayModeToggle.checked = result.workdayMode;
-    }
     console.log('Loaded saved preferences:', result);
+    
+    if (useDemoDataToggle && result.useDemoData !== undefined) {
+      useDemoDataToggle.checked = result.useDemoData;
+      console.log('Set useDemoData toggle to:', result.useDemoData);
+    } else if (useDemoDataToggle) {
+      // Default to using demo data if not set
+      useDemoDataToggle.checked = true;
+      console.log('Set useDemoData toggle to default true');
+    }
+    
+    if (workdayModeToggle && result.workdayMode !== undefined) {
+      workdayModeToggle.checked = result.workdayMode;
+      console.log('Set workdayMode toggle to:', result.workdayMode);
+    } else if (workdayModeToggle) {
+      // Default to workday mode on
+      workdayModeToggle.checked = true;
+      console.log('Set workdayMode toggle to default true');
+    }
+    
+    // Update profile data based on saved preferences
+    updateSelectedProfileData(
+      useDemoDataToggle ? useDemoDataToggle.checked : true,
+      appProfileData,
+      DEMO_PROFILE,
+      status
+    );
   });
   
   // Function to initialize UI and fetch profile data
   async function initializeUI() {
-    // Always start with demo data available
-    profileData = DEMO_PROFILE;
-    console.log('Set default demo profile data');
+    console.log('Initializing UI and fetching profile data');
     
     try {
       // Try to fetch profile data from Flask app
       console.log('Fetching profile data from API...');
       const response = await fetch(`${API_BASE_URL}/api/profile`);
+      
       if (response.ok) {
         const data = await response.json();
         console.log('Received profile data from API:', data);
@@ -240,53 +276,84 @@ document.addEventListener('DOMContentLoaded', function() {
           }));
         }
         
-        connectionStatus.textContent = 'Connected to web app';
-        connectionStatus.className = 'status-indicator connected';
+        if (connectionStatus) {
+          connectionStatus.textContent = 'Connected to web app';
+          connectionStatus.className = 'status-indicator connected';
+        }
         
         // Store the app profile data
         chrome.storage.local.set({ 'appProfileData': appProfileData });
+        console.log('Stored app profile data in local storage');
       } else {
-        throw new Error('Failed to fetch profile data');
+        throw new Error(`Failed to fetch profile data: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
       console.log('Error fetching profile data:', error);
-      connectionStatus.textContent = 'Could not connect to web app';
-      connectionStatus.className = 'status-indicator disconnected';
+      
+      if (connectionStatus) {
+        connectionStatus.textContent = 'Could not connect to web app';
+        connectionStatus.className = 'status-indicator disconnected';
+      }
+      
+      console.log('Using demo data as fallback');
     }
     
     // Update the active profile data based on toggle
-    updateSelectedProfileData();
+    const useDemoData = useDemoDataToggle ? useDemoDataToggle.checked : true;
+    updateSelectedProfileData(useDemoData, appProfileData, DEMO_PROFILE, status);
   }
   
   // Update which profile data is being used based on toggle
-  function updateSelectedProfileData() {
-    if (useDemoDataToggle && useDemoDataToggle.checked) {
+  function updateSelectedProfileData(useDemoData, appData, demoData, statusElement) {
+    if (useDemoData) {
       // Use demo data
-      profileData = DEMO_PROFILE;
-      if (status) status.textContent = 'Using demo data';
-      if (status) status.className = 'status info';
-      console.log('Using demo profile data');
-    } else if (appProfileData) {
+      profileData = demoData;
+      console.log('Using demo profile data:', profileData);
+      
+      if (statusElement) {
+        statusElement.textContent = 'Using demo data (Michael Jordan)';
+        statusElement.className = 'status info';
+      }
+      
+      if (connectionStatus) {
+        connectionStatus.textContent = 'Using demo data';
+        connectionStatus.className = 'status-indicator demo';
+      }
+    } else if (appData) {
       // Use app data
-      profileData = appProfileData;
-      if (status) status.textContent = 'Using your profile data';
-      if (status) status.className = 'status info';
-      console.log('Using app profile data');
+      profileData = appData;
+      console.log('Using app profile data:', profileData);
+      
+      if (statusElement) {
+        statusElement.textContent = 'Using your profile data';
+        statusElement.className = 'status info';
+      }
     } else {
       // If app data is not available, fall back to demo even if toggle is off
-      profileData = DEMO_PROFILE;
-      if (status) status.textContent = 'App data not available, using demo data';
-      if (status) status.className = 'status warning';
-      if (useDemoDataToggle) useDemoDataToggle.checked = true;
-      console.log('Falling back to demo data');
+      profileData = demoData;
+      console.log('App data not available, falling back to demo data');
+      
+      if (statusElement) {
+        statusElement.textContent = 'App data not available, using demo data';
+        statusElement.className = 'status warning';
+      }
+      
+      if (useDemoDataToggle && !useDemoDataToggle.checked) {
+        useDemoDataToggle.checked = true;
+        console.log('Forced demo data toggle to true due to missing app data');
+      }
+      
+      if (connectionStatus) {
+        connectionStatus.textContent = 'Using demo data (app unavailable)';
+        connectionStatus.className = 'status-indicator demo';
+      }
     }
-    
-    console.log('Active profile data:', profileData);
   }
   
   // Handle analyze form button click
   function handleAnalyzeForm() {
-    console.log('Analyze Form button clicked');
+    console.log('handleAnalyzeForm function called');
+    
     if (!status) {
       console.error('Status element not found');
       return;
@@ -303,14 +370,21 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       
-      console.log('Sending message to tab:', tabs[0].id);
+      const currentTab = tabs[0];
+      console.log('Sending ANALYZE_FORM message to tab:', currentTab.id);
+      
+      const isWorkday = workdayModeToggle ? workdayModeToggle.checked : true;
+      console.log('Workday mode enabled:', isWorkday);
+      
       chrome.tabs.sendMessage(
-        tabs[0].id,
+        currentTab.id,
         { 
           action: 'ANALYZE_FORM',
-          isWorkday: workdayModeToggle ? workdayModeToggle.checked : true
+          isWorkday: isWorkday 
         },
         function(response) {
+          console.log('Got response from content script:', response);
+          
           if (chrome.runtime.lastError) {
             console.error('Runtime error:', chrome.runtime.lastError);
             status.textContent = 'Error: Could not connect to page. Make sure to reload the page.';
@@ -325,10 +399,13 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
           }
           
-          console.log('Got response:', response);
           if (response.fields && response.fields.length > 0) {
             status.textContent = `Found ${response.fields.length} fields. Ready to autofill.`;
             status.className = 'status success';
+            
+            if (autofillBtn && autofillBtn.disabled) {
+              autofillBtn.disabled = false;
+            }
           } else {
             status.textContent = 'No form fields found. Make sure you are on a form page.';
             status.className = 'status warning';
@@ -340,7 +417,8 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Handle autofill button click
   function handleAutofill() {
-    console.log('Autofill button clicked');
+    console.log('handleAutofill function called');
+    
     if (!status) {
       console.error('Status element not found');
       return;
@@ -349,8 +427,19 @@ document.addEventListener('DOMContentLoaded', function() {
     status.textContent = 'Filling form fields...';
     status.className = 'status info';
     
-    // Make sure we have the correct profile data selected
-    updateSelectedProfileData();
+    // Make sure we have the correct profile data
+    const useDemoData = useDemoDataToggle ? useDemoDataToggle.checked : true;
+    updateSelectedProfileData(useDemoData, appProfileData, DEMO_PROFILE, status);
+    
+    // Ensure we have profile data to send
+    if (!profileData || !profileData.personal) {
+      console.error('No valid profile data available for autofill');
+      status.textContent = 'Error: No profile data available';
+      status.className = 'status error';
+      return;
+    }
+    
+    console.log('Using profile data for autofill:', profileData);
     
     chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
       if (!tabs || tabs.length === 0) {
@@ -360,15 +449,23 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       
-      console.log('Sending autofill message with profile:', profileData);
+      const currentTab = tabs[0];
+      const isWorkday = workdayModeToggle ? workdayModeToggle.checked : true;
+      
+      console.log('Sending AUTOFILL_FORM message to tab:', currentTab.id);
+      console.log('With profile data:', profileData);
+      console.log('Workday mode enabled:', isWorkday);
+      
       chrome.tabs.sendMessage(
-        tabs[0].id,
+        currentTab.id,
         { 
           action: 'AUTOFILL_FORM',
           profile: profileData,
-          isWorkday: workdayModeToggle ? workdayModeToggle.checked : true
+          isWorkday: isWorkday
         },
         function(response) {
+          console.log('Got autofill response:', response);
+          
           if (chrome.runtime.lastError) {
             console.error('Runtime error:', chrome.runtime.lastError);
             status.textContent = 'Error: Could not connect to page. Make sure to reload the page.';
@@ -383,7 +480,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
           }
           
-          console.log('Got autofill response:', response);
           if (response.success) {
             if (response.filledCount > 0) {
               status.textContent = `Successfully filled ${response.filledCount} fields`;
@@ -393,7 +489,7 @@ document.addEventListener('DOMContentLoaded', function() {
               status.className = 'status warning';
             }
           } else {
-            status.textContent = 'Failed to fill form fields. Try reloading the page.';
+            status.textContent = response.error || 'Failed to fill form fields. Try reloading the page.';
             status.className = 'status error';
           }
         }
