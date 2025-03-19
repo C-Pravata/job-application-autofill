@@ -2,16 +2,11 @@
   "manifest_version": 3,
   "name": "Job Application Autofill",
   "version": "1.0",
-  "description": "Automatically fill job applications using your stored profile data",
-  "permissions": [
-    "activeTab",
-    "storage",
-    "scripting",
-    "tabs"
-  ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "description": "Automatically fill out job applications with your profile information",
+  "icons": {
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -20,16 +15,18 @@
       "128": "images/icon128.png"
     }
   },
-  "icons": {
-    "16": "images/icon16.png",
-    "48": "images/icon48.png",
-    "128": "images/icon128.png"
-  },
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": ["js/content.js"],
-      "css": ["css/content.css"],
       "run_at": "document_idle"
     }
   ]

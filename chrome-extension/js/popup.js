@@ -14,6 +14,7 @@ const mappingStatus = document.getElementById('mapping-status');
 const autofillStatus = document.getElementById('autofill-status');
 const mappingList = document.getElementById('mapping-list');
 const fieldMappingSection = document.getElementById('field-mapping-section');
+const workdayModeToggle = document.getElementById('workday-mode-toggle');
 
 // Login Elements
 const loginSection = document.createElement('div');
@@ -99,15 +100,15 @@ const DEMO_PROFILE = {
 
 // Workday-specific field mapping patterns
 const WORKDAY_PATTERNS = {
-  firstName: ['firstName', 'first-name', 'first_name', 'given-name', 'givenName'],
-  lastName: ['lastName', 'last-name', 'last_name', 'family-name', 'familyName'],
-  email: ['email', 'emailAddress', 'email-address', 'emailId'],
-  phone: ['phone', 'phoneNumber', 'phone-number', 'mobile', 'cellPhone', 'workPhone'],
-  address: ['address', 'streetAddress', 'street-address', 'addressLine1'],
-  city: ['city', 'cityName', 'locality'],
-  state: ['state', 'province', 'region', 'administrative-area'],
-  zipCode: ['zipCode', 'postalCode', 'zip', 'postal', 'postal-code'],
-  linkedin: ['linkedin', 'linkedinUrl', 'linkedin-url'],
+  firstName: ['firstName', 'first-name', 'first_name', 'given-name', 'givenName', 'legalName--firstName'],
+  lastName: ['lastName', 'last-name', 'last_name', 'family-name', 'familyName', 'legalName--lastName'],
+  email: ['email', 'emailAddress', 'email-address', 'emailId', 'contact--email'],
+  phone: ['phone', 'phoneNumber', 'phone-number', 'mobile', 'cellPhone', 'workPhone', 'contact--phone'],
+  address: ['address', 'streetAddress', 'street-address', 'addressLine1', 'address--line1'],
+  city: ['city', 'cityName', 'locality', 'address--city'],
+  state: ['state', 'province', 'region', 'administrative-area', 'address--state'],
+  zipCode: ['zipCode', 'postalCode', 'zip', 'postal', 'postal-code', 'address--postalCode'],
+  linkedin: ['linkedin', 'linkedinUrl', 'linkedin-url', 'socialMedia--linkedin'],
   education: ['education', 'school', 'university', 'college', 'institute', 'degree'],
   jobTitle: ['position', 'title', 'jobTitle', 'job-title', 'role'],
   company: ['company', 'employer', 'organization', 'workplace'],
@@ -115,6 +116,15 @@ const WORKDAY_PATTERNS = {
   skills: ['skills', 'qualifications', 'abilities', 'competencies', 'expertise'],
   languages: ['languages', 'language-proficiency', 'spoken-languages']
 };
+
+// Constants
+const PROFILE_DATA_KEY = 'profileData';
+const LOGGED_IN_KEY = 'loggedIn';
+const WORKDAY_MODE_KEY = 'workdayMode';
+
+// Default test credentials
+const TEST_USERNAME = 'user';
+const TEST_PASSWORD = 'password';
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
@@ -206,8 +216,6 @@ async function handleLogin(e) {
 
 // Function to update profile status with more accurate calculation
 function updateProfileStatus() {
-  // For demo purposes, we'll use the sample profile
-  // In a real implementation, we would get this from the API
   // Get the profile from storage
   chrome.storage.local.get(['profile', 'isLoggedIn'], function(result) {
     if (result.isLoggedIn) {
@@ -236,18 +244,28 @@ function updateProfileStatus() {
       const completionPercentage = Math.round((completedSections / totalSections) * 100);
       
       // Update profile status in UI
-      document.getElementById('profile-status').textContent = 
-        `Profile ${completionPercentage}% complete`;
+      const profileStatus = document.getElementById('profile-status');
+      if (profileStatus) {
+        profileStatus.textContent = `Profile ${completionPercentage}% complete`;
+      }
       
       // Show different UI for logged in state
-      document.getElementById('login-form').style.display = 'none';
-      document.getElementById('profile-info').style.display = 'block';
-      document.getElementById('autofill-actions').style.display = 'block';
+      const loginFormContainer = document.getElementById('login-form-container');
+      const profileInfo = document.getElementById('profile-info');
+      const autofillActions = document.getElementById('autofill-actions');
+      
+      if (loginFormContainer) loginFormContainer.style.display = 'none';
+      if (profileInfo) profileInfo.style.display = 'block';
+      if (autofillActions) autofillActions.style.display = 'block';
     } else {
       // Show login form
-      document.getElementById('login-form').style.display = 'block';
-      document.getElementById('profile-info').style.display = 'none';
-      document.getElementById('autofill-actions').style.display = 'none';
+      const loginFormContainer = document.getElementById('login-form-container');
+      const profileInfo = document.getElementById('profile-info');
+      const autofillActions = document.getElementById('autofill-actions');
+      
+      if (loginFormContainer) loginFormContainer.style.display = 'block';
+      if (profileInfo) profileInfo.style.display = 'none';
+      if (autofillActions) autofillActions.style.display = 'none';
     }
   });
 }
@@ -278,6 +296,21 @@ function setupEventListeners() {
   if (autofillBtn) {
     autofillBtn.addEventListener('click', handleAutofill);
   }
+
+  // Save Workday mode preference
+  if (workdayModeToggle) {
+    // Get stored preference or default to true
+    chrome.storage.local.get(['workdayMode'], function(result) {
+      if (result.workdayMode !== undefined) {
+        workdayModeToggle.checked = result.workdayMode;
+      }
+    });
+
+    // Save when toggle changes
+    workdayModeToggle.addEventListener('change', function() {
+      chrome.storage.local.set({ workdayMode: workdayModeToggle.checked });
+    });
+  }
 }
 
 // Handle analyze form button click
@@ -292,12 +325,8 @@ async function handleAnalyzeForm() {
   try {
     const activeTab = await getActiveTab();
     
-    // Check if the active tab is a Workday or job application site
-    const url = activeTab.url || '';
-    const isWorkday = url.includes('workday') || 
-                      url.includes('apply') || 
-                      url.includes('careers') || 
-                      url.includes('jobs');
+    // Use the workday mode toggle value
+    const isWorkday = workdayModeToggle ? workdayModeToggle.checked : true;
     
     // Send message to content script
     chrome.tabs.sendMessage(activeTab.id, { 
@@ -308,7 +337,7 @@ async function handleAnalyzeForm() {
       if (chrome.runtime.lastError) {
         console.error('Error sending message:', chrome.runtime.lastError);
         showMessage(mappingStatus, 
-          'Error: Could not connect to page. Please make sure you\'re on a form page and try reloading.', 
+          'Error: Could not connect to page. Make sure you\'re on a form page and try refreshing.', 
           'error');
         return;
       }
@@ -340,7 +369,7 @@ async function handleAnalyzeForm() {
           
           // Create field name element with bold styling
           const fieldName = document.createElement('strong');
-          fieldName.textContent = field.name || field.id || field.type;
+          fieldName.textContent = field.label || field.name || field.id || field.type;
           
           // Create arrow element
           const arrow = document.createElement('span');
@@ -374,15 +403,16 @@ async function handleAnalyzeForm() {
 
 // Function to determine which profile field maps to a form field
 function determineMappedProfileField(field) {
-  const { id = '', name = '', label = '', placeholder = '' } = field;
+  const { id = '', name = '', label = '', placeholder = '', automationId = '' } = field;
   
   // Lowercase identifiers for case-insensitive matching
   const identifiers = [
     id.toLowerCase(),
     name.toLowerCase(),
     label.toLowerCase(),
-    placeholder.toLowerCase()
-  ];
+    placeholder.toLowerCase(),
+    automationId ? automationId.toLowerCase() : ''
+  ].filter(Boolean); // Remove empty strings
   
   // Check for Workday-specific patterns
   for (const [profileField, patterns] of Object.entries(WORKDAY_PATTERNS)) {
@@ -447,12 +477,8 @@ async function handleAutofill() {
     try {
       const activeTab = await getActiveTab();
       
-      // Check if the active tab is a Workday or job application site
-      const url = activeTab.url || '';
-      const isWorkday = url.includes('workday') || 
-                        url.includes('apply') || 
-                        url.includes('careers') || 
-                        url.includes('jobs');
+      // Use the workday mode toggle value
+      const isWorkday = workdayModeToggle ? workdayModeToggle.checked : true;
       
       // Send message to content script with profile data
       chrome.tabs.sendMessage(
@@ -467,7 +493,7 @@ async function handleAutofill() {
           if (chrome.runtime.lastError) {
             console.error('Error sending message:', chrome.runtime.lastError);
             showMessage(autofillStatus, 
-              'Error: Could not connect to page. Please make sure you\'re on a form page and try reloading.', 
+              'Error: Could not connect to page. Make sure you\'re on a form page and try refreshing.', 
               'error');
             return;
           }

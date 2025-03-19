@@ -38,10 +38,19 @@
         <button id="logout-btn" class="btn btn-outline">Log Out</button>
       </div>
       
+      <div class="site-mode-selector">
+        <label class="toggle-switch">
+          <input type="checkbox" id="workday-mode-toggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+        <span class="toggle-label">Workday Mode</span>
+        <span class="toggle-description">Enable for Workday job applications</span>
+      </div>
+      
       <div class="steps-container">
         <div class="step">
           <div class="step-number">1</div>
-          <div class="step-text">Go to a job application form</div>
+          <div class="step-text">Navigate to the job application form</div>
         </div>
         <div class="step">
           <div class="step-number">2</div>
@@ -71,11 +80,6 @@
         <h3>Detected Form Fields</h3>
         <p class="info-text">The extension will map these fields to your profile:</p>
         <ul id="mapping-list" class="mapping-list"></ul>
-      </div>
-      
-      <!-- Test Form Link -->
-      <div class="test-form-container">
-        <p>Need to test? Open our <a href="test-form.html" target="_blank">sample job application form</a>.</p>
       </div>
     </div>
   </div>

@@ -52,35 +52,50 @@ function analyzeWorkdayForm() {
   console.log('Analyzing Workday form...');
   let fields = [];
   
-  // Look for Workday specific elements
-  // Workday typically uses specific CSS classes or data attributes
-  
-  // First try to find Workday input fields
-  const workdayInputs = document.querySelectorAll('input[data-automation-id], select[data-automation-id], textarea[data-automation-id]');
-  if (workdayInputs.length > 0) {
-    console.log(`Found ${workdayInputs.length} Workday inputs with data-automation-id`);
-    workdayInputs.forEach(input => {
-      if (isRelevantField(input)) {
-        fields.push(extractWorkdayFieldInfo(input));
-      }
-    });
-  }
-  
-  // If we didn't find Workday specific elements, try other Workday selectors
-  if (fields.length === 0) {
-    // Try to find inputs within Workday container elements
-    const workdayContainers = document.querySelectorAll('.css-1mjrxw9, .css-1pvqt7v, .css-1dqr5u3');
-    workdayContainers.forEach(container => {
-      const inputs = container.querySelectorAll('input, select, textarea');
+  // Check specifically for Workday formField divs with data-automation-id
+  const workdayFieldDivs = document.querySelectorAll('div[data-automation-id^="formField"]');
+  if (workdayFieldDivs.length > 0) {
+    console.log(`Found ${workdayFieldDivs.length} Workday form field divs`);
+    
+    workdayFieldDivs.forEach(div => {
+      // Find the input inside this div
+      const inputs = div.querySelectorAll('input, select, textarea');
       inputs.forEach(input => {
         if (isRelevantField(input)) {
-          fields.push(extractWorkdayFieldInfo(input));
+          const fieldInfo = extractWorkdayFieldInfo(input, div);
+          fields.push(fieldInfo);
         }
       });
     });
   }
   
-  // If we still don't have any fields, fallback to regular analysis
+  // If no fields found using that method, try direct data-fkit-id approach
+  if (fields.length === 0) {
+    const workdayInputs = document.querySelectorAll('[data-fkit-id], [data-automation-id]');
+    console.log(`Found ${workdayInputs.length} Workday inputs with data attributes`);
+    
+    workdayInputs.forEach(input => {
+      if (isRelevantField(input)) {
+        const parent = findWorkdayFieldParent(input);
+        const fieldInfo = extractWorkdayFieldInfo(input, parent);
+        fields.push(fieldInfo);
+      }
+    });
+  }
+  
+  // If still no fields, look for any inputs with specific Workday IDs
+  if (fields.length === 0) {
+    const nameInputs = document.querySelectorAll('input[id*="legalName"], input[id*="firstName"], input[id*="lastName"]');
+    nameInputs.forEach(input => {
+      if (isRelevantField(input)) {
+        const parent = findWorkdayFieldParent(input);
+        const fieldInfo = extractWorkdayFieldInfo(input, parent);
+        fields.push(fieldInfo);
+      }
+    });
+  }
+  
+  // If still no fields, try one more generic approach
   if (fields.length === 0) {
     console.log('No Workday-specific fields found, trying regular analysis');
     return analyzeInputsDirectly();
@@ -89,29 +104,70 @@ function analyzeWorkdayForm() {
   return fields;
 }
 
+// Function to find the Workday field parent div
+function findWorkdayFieldParent(element) {
+  let current = element.parentElement;
+  
+  // Go up the DOM tree to find a div with data-automation-id starting with "formField"
+  while (current && current !== document.body) {
+    if (current.getAttribute && 
+        current.getAttribute('data-automation-id') && 
+        current.getAttribute('data-automation-id').startsWith('formField')) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  
+  return null;
+}
+
 // Extract Workday specific field information
-function extractWorkdayFieldInfo(field) {
+function extractWorkdayFieldInfo(field, parentDiv) {
   const fieldInfo = extractFieldInfo(field);
   
   // Add Workday-specific attributes
-  const automationId = field.getAttribute('data-automation-id');
-  if (automationId) {
-    fieldInfo.automationId = automationId;
+  fieldInfo.automationId = field.getAttribute('data-automation-id') || '';
+  fieldInfo.fkitId = field.getAttribute('data-fkit-id') || '';
+  
+  // Extract more accurate field name from IDs
+  if (fieldInfo.fkitId) {
+    const parts = fieldInfo.fkitId.split('--');
+    if (parts.length > 1) {
+      fieldInfo.workdayFieldType = parts[0];
+      fieldInfo.workdayFieldName = parts[1];
+    }
   }
   
-  // Look for Workday label
-  const label = getWorkdayFieldLabel(field);
-  if (label && !fieldInfo.label) {
-    fieldInfo.label = label;
+  // Look for Workday label if we have a parent div
+  if (parentDiv) {
+    const label = getWorkdayFieldLabel(field, parentDiv);
+    if (label) {
+      fieldInfo.label = label;
+    }
   }
   
   return fieldInfo;
 }
 
 // Get label for Workday field
-function getWorkdayFieldLabel(field) {
-  // Workday often uses labels with specific classes
-  let label = '';
+function getWorkdayFieldLabel(field, parentDiv) {
+  // If we have parent div, try to find a label inside it
+  if (parentDiv) {
+    const labelElement = parentDiv.querySelector('label, span.css-1ud5i8o');
+    if (labelElement) {
+      // Clean up the label text (remove asterisks for required fields)
+      let labelText = labelElement.textContent.trim();
+      return labelText.replace(/\*$/, '').trim();
+    }
+  }
+  
+  // Try to find a label with a matching 'for' attribute
+  if (field.id) {
+    const labelElement = document.querySelector(`label[for="${field.id}"]`);
+    if (labelElement) {
+      return labelElement.textContent.trim();
+    }
+  }
   
   // Try to find a label based on automation ID
   const automationId = field.getAttribute('data-automation-id');
@@ -123,20 +179,7 @@ function getWorkdayFieldLabel(field) {
     }
   }
   
-  // Try to find a label in the parent containers
-  let current = field.parentElement;
-  while (current && current !== document.body) {
-    // Look for Workday label classes
-    const labelElement = current.querySelector('.css-1osrkz3, .css-16u8zxh, .css-1qajm9i');
-    if (labelElement) {
-      return labelElement.textContent.trim();
-    }
-    
-    // Move up the DOM tree
-    current = current.parentElement;
-  }
-  
-  return label;
+  return '';
 }
 
 // Function to analyze inputs directly (not in forms)
@@ -297,7 +340,7 @@ function autofillForm(profile, isWorkday = false) {
     }
     
     const field = fields[currentIndex];
-    statusContainer.textContent = `Filling field ${currentIndex + 1}/${fields.length}...`;
+    statusContainer.textContent = `Filling field ${currentIndex + 1}/${fields.length}: ${field.label || field.id || ''}`;
     
     // Try to fill the field
     const fieldElement = field.element;
@@ -318,7 +361,9 @@ function autofillForm(profile, isWorkday = false) {
       
       // Fill field with appropriate value from profile
       setTimeout(() => {
-        const filled = fillField(fieldElement, field, profile, isWorkday);
+        const filled = isWorkday ? 
+          fillWorkdayField(fieldElement, field, profile) : 
+          fillField(fieldElement, field, profile);
         
         if (filled) {
           fieldElement.classList.add('job-autofill-success');
@@ -344,12 +389,148 @@ function autofillForm(profile, isWorkday = false) {
   return { success: true, fieldsFilledCount: filledCount };
 }
 
+// Specialized function to fill Workday fields
+function fillWorkdayField(fieldElement, fieldInfo, profile) {
+  // Determine the value based on field properties
+  let valueToUse = determineValueForWorkday(fieldInfo, profile);
+  
+  if (!valueToUse && valueToUse !== false) {
+    // No matching value found for this field
+    return false;
+  }
+  
+  try {
+    // Specifically handle different Workday field types
+    if (fieldInfo.fkitId && fieldInfo.fkitId.includes('legalName--firstName')) {
+      fieldElement.value = profile.personal?.firstName || '';
+    } else if (fieldInfo.fkitId && fieldInfo.fkitId.includes('legalName--lastName')) {
+      fieldElement.value = profile.personal?.lastName || '';
+    } else if (fieldInfo.fkitId && fieldInfo.fkitId.includes('email')) {
+      fieldElement.value = profile.personal?.email || '';
+    } else if (fieldInfo.fkitId && fieldInfo.fkitId.includes('phone')) {
+      fieldElement.value = profile.personal?.phone || '';
+    } else {
+      // Generic field handling
+      if (fieldInfo.tag === 'input') {
+        switch (fieldInfo.type) {
+          case 'text':
+          case 'email':
+          case 'tel':
+          case 'url':
+          case 'search':
+            fieldElement.value = valueToUse;
+            break;
+            
+          case 'checkbox':
+            if (typeof valueToUse === 'boolean') {
+              fieldElement.checked = valueToUse;
+            } else {
+              fieldElement.checked = valueToUse === fieldElement.value;
+            }
+            break;
+            
+          case 'radio':
+            if (fieldElement.value === valueToUse || 
+                (Array.isArray(valueToUse) && valueToUse.includes(fieldElement.value))) {
+              fieldElement.checked = true;
+            }
+            break;
+            
+          case 'date':
+            if (valueToUse instanceof Date) {
+              const dateString = valueToUse.toISOString().split('T')[0];
+              fieldElement.value = dateString;
+            } else if (typeof valueToUse === 'string') {
+              fieldElement.value = valueToUse;
+            }
+            break;
+            
+          default:
+            fieldElement.value = valueToUse;
+        }
+      } else if (fieldInfo.tag === 'textarea') {
+        fieldElement.value = valueToUse;
+      } else if (fieldInfo.tag === 'select') {
+        fillSelectField(fieldElement, valueToUse);
+      }
+    }
+    
+    // Thorough event triggering for Workday
+    fieldElement.focus();
+    fieldElement.dispatchEvent(new Event('focus', { bubbles: true }));
+    fieldElement.dispatchEvent(new Event('input', { bubbles: true }));
+    fieldElement.dispatchEvent(new Event('change', { bubbles: true }));
+    fieldElement.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
+    fieldElement.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+    fieldElement.dispatchEvent(new Event('blur', { bubbles: true }));
+    
+    // Give some time for Workday validation to kick in
+    setTimeout(() => {
+      fieldElement.dispatchEvent(new Event('change', { bubbles: true }));
+    }, 100);
+    
+    return true;
+  } catch (error) {
+    console.error('Error filling Workday field:', error);
+    return false;
+  }
+}
+
+// Fill a select field by trying to find a matching option
+function fillSelectField(fieldElement, valueToUse) {
+  const options = fieldElement.options;
+  let matched = false;
+  
+  // If valueToUse is an array, try each value
+  const valuesToTry = Array.isArray(valueToUse) ? valueToUse : [valueToUse];
+  
+  for (const value of valuesToTry) {
+    // Try exact match
+    for (let i = 0; i < options.length; i++) {
+      const option = options[i];
+      if (option.value === value || option.text === value) {
+        fieldElement.selectedIndex = i;
+        matched = true;
+        break;
+      }
+    }
+    
+    if (matched) break;
+    
+    // Try case-insensitive match
+    for (let i = 0; i < options.length; i++) {
+      const option = options[i];
+      if (option.value.toLowerCase() === value.toLowerCase() || 
+          option.text.toLowerCase() === value.toLowerCase()) {
+        fieldElement.selectedIndex = i;
+        matched = true;
+        break;
+      }
+    }
+    
+    if (matched) break;
+    
+    // Try partial match
+    for (let i = 0; i < options.length; i++) {
+      const option = options[i];
+      if (option.value.toLowerCase().includes(value.toLowerCase()) || 
+          option.text.toLowerCase().includes(value.toLowerCase())) {
+        fieldElement.selectedIndex = i;
+        matched = true;
+        break;
+      }
+    }
+    
+    if (matched) break;
+  }
+  
+  return matched;
+}
+
 // Fill a specific field based on its characteristics and profile data
-function fillField(fieldElement, fieldInfo, profile, isWorkday = false) {
+function fillField(fieldElement, fieldInfo, profile) {
   // Determine what value to use based on field characteristics
-  const valueToUse = isWorkday ? 
-    determineValueForWorkday(fieldInfo, profile) : 
-    determineValueToUse(fieldInfo, profile);
+  const valueToUse = determineValueToUse(fieldInfo, profile);
   
   if (!valueToUse && valueToUse !== false) {
     // No matching value found for this field
@@ -369,17 +550,14 @@ function fillField(fieldElement, fieldInfo, profile, isWorkday = false) {
           break;
           
         case 'checkbox':
-          // Only check if the value matches
           if (typeof valueToUse === 'boolean') {
             fieldElement.checked = valueToUse;
           } else {
-            // Try to determine if should be checked
             fieldElement.checked = valueToUse === fieldElement.value;
           }
           break;
           
         case 'radio':
-          // Only select if the value matches
           if (fieldElement.value === valueToUse || 
               (Array.isArray(valueToUse) && valueToUse.includes(fieldElement.value))) {
             fieldElement.checked = true;
@@ -387,12 +565,10 @@ function fillField(fieldElement, fieldInfo, profile, isWorkday = false) {
           break;
           
         case 'date':
-          // Handle date fields
           if (valueToUse instanceof Date) {
             const dateString = valueToUse.toISOString().split('T')[0];
             fieldElement.value = dateString;
           } else if (typeof valueToUse === 'string') {
-            // Try to format the date string
             fieldElement.value = valueToUse;
           }
           break;
@@ -403,77 +579,12 @@ function fillField(fieldElement, fieldInfo, profile, isWorkday = false) {
     } else if (fieldInfo.tag === 'textarea') {
       fieldElement.value = valueToUse;
     } else if (fieldInfo.tag === 'select') {
-      // Try to find a matching option
-      const options = fieldElement.options;
-      let matched = false;
-      
-      // If valueToUse is an array, try each value
-      const valuesToTry = Array.isArray(valueToUse) ? valueToUse : [valueToUse];
-      
-      for (const value of valuesToTry) {
-        // Try exact match
-        for (let i = 0; i < options.length; i++) {
-          const option = options[i];
-          if (option.value === value || option.text === value) {
-            fieldElement.selectedIndex = i;
-            matched = true;
-            break;
-          }
-        }
-        
-        if (matched) break;
-        
-        // Try case-insensitive match
-        for (let i = 0; i < options.length; i++) {
-          const option = options[i];
-          if (option.value.toLowerCase() === value.toLowerCase() || 
-              option.text.toLowerCase() === value.toLowerCase()) {
-            fieldElement.selectedIndex = i;
-            matched = true;
-            break;
-          }
-        }
-        
-        if (matched) break;
-        
-        // Try partial match
-        for (let i = 0; i < options.length; i++) {
-          const option = options[i];
-          if (option.value.toLowerCase().includes(value.toLowerCase()) || 
-              option.text.toLowerCase().includes(value.toLowerCase())) {
-            fieldElement.selectedIndex = i;
-            matched = true;
-            break;
-          }
-        }
-        
-        if (matched) break;
-      }
-      
-      if (!matched) {
-        return false;
-      }
+      fillSelectField(fieldElement, valueToUse);
     }
     
-    // For Workday forms, we need to simulate user interaction more thoroughly
-    if (isWorkday) {
-      // Focus the field first
-      fieldElement.focus();
-      
-      // Dispatch multiple events to ensure the change is recognized
-      fieldElement.dispatchEvent(new Event('input', { bubbles: true }));
-      fieldElement.dispatchEvent(new Event('change', { bubbles: true }));
-      fieldElement.dispatchEvent(new Event('blur', { bubbles: true }));
-      
-      // For Workday, sometimes we need to trigger click events on the input
-      if (fieldInfo.type === 'text' || fieldInfo.type === 'email' || fieldInfo.type === 'tel') {
-        fieldElement.click();
-      }
-    } else {
-      // Standard form event triggering
-      fieldElement.dispatchEvent(new Event('input', { bubbles: true }));
-      fieldElement.dispatchEvent(new Event('change', { bubbles: true }));
-    }
+    // Standard form event triggering
+    fieldElement.dispatchEvent(new Event('input', { bubbles: true }));
+    fieldElement.dispatchEvent(new Event('change', { bubbles: true }));
     
     return true;
   } catch (error) {
@@ -484,8 +595,27 @@ function fillField(fieldElement, fieldInfo, profile, isWorkday = false) {
 
 // Special function for determining values in Workday forms
 function determineValueForWorkday(fieldInfo, profile) {
+  // First check if we have a direct Workday field ID match
+  if (fieldInfo.fkitId) {
+    if (fieldInfo.fkitId.includes('legalName--firstName')) {
+      return profile.personal?.firstName || '';
+    }
+    if (fieldInfo.fkitId.includes('legalName--lastName')) {
+      return profile.personal?.lastName || '';
+    }
+    if (fieldInfo.fkitId.includes('contact--email')) {
+      return profile.personal?.email || '';
+    }
+    if (fieldInfo.fkitId.includes('contact--phone')) {
+      return profile.personal?.phone || '';
+    }
+    if (fieldInfo.fkitId.includes('address--line1')) {
+      return profile.personal?.address || '';
+    }
+  }
+  
   // Extract identifiers for matching
-  const { id = '', name = '', label = '', placeholder = '', automationId = '' } = fieldInfo;
+  const { id = '', name = '', label = '', placeholder = '', automationId = '', fkitId = '' } = fieldInfo;
   
   // Lowercase identifiers for case-insensitive matching
   const identifiers = [
@@ -493,7 +623,8 @@ function determineValueForWorkday(fieldInfo, profile) {
     name.toLowerCase(),
     label.toLowerCase(),
     placeholder.toLowerCase(),
-    automationId ? automationId.toLowerCase() : ''
+    automationId ? automationId.toLowerCase() : '',
+    fkitId ? fkitId.toLowerCase() : ''
   ].filter(Boolean); // Remove empty strings
   
   // Check for specific Workday field patterns
