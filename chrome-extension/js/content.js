@@ -3,25 +3,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('Content script received message:', request);
     
     if (request.action === 'ANALYZE_FORM') {
-        const fields = analyzeFormFields();
+        const fields = analyzeFormFields(request.isWorkday);
         console.log('Analyzed fields:', fields);
         sendResponse({ fields });
     } else if (request.action === 'AUTOFILL_FORM') {
-        const result = autofillForm(request.profileData);
+        const result = autofillForm(request.profile, request.isWorkday);
         console.log('Autofill result:', result);
         sendResponse(result);
     }
     return true;
 });
 
-function analyzeFormFields() {
+function analyzeFormFields(isWorkday) {
     console.log('Analyzing form fields...');
     const fields = [];
     
     // Find all input elements
     const inputs = document.querySelectorAll('input, select, textarea');
     inputs.forEach(input => {
-        const fieldInfo = extractFieldInfo(input);
+        // Skip hidden fields
+        if (input.type === 'hidden' || !isVisible(input)) {
+            return;
+        }
+        
+        const fieldInfo = extractFieldInfo(input, isWorkday);
         if (fieldInfo) {
             fields.push(fieldInfo);
         }
@@ -31,31 +36,44 @@ function analyzeFormFields() {
     return fields;
 }
 
-function extractFieldInfo(element) {
-    // Skip hidden or disabled fields
-    if (element.type === 'hidden' || element.disabled || element.readOnly) {
-        return null;
-    }
-    
+function extractFieldInfo(element, isWorkday) {
     const fieldInfo = {
+        element: element,
         type: element.type || 'text',
         id: element.id,
         name: element.name,
         automationId: element.getAttribute('data-automation-id'),
+        fkitId: element.getAttribute('data-fkit-id'),
         label: findFieldLabel(element),
-        element: element
+        value: element.value,
+        isWorkday: isWorkday
     };
     
-    // Only include fields we can identify
-    if (fieldInfo.id || fieldInfo.name || fieldInfo.automationId || fieldInfo.label) {
-        return fieldInfo;
+    // For Workday forms, look for specific patterns
+    if (isWorkday) {
+        const container = findWorkdayContainer(element);
+        if (container) {
+            fieldInfo.container = container;
+            fieldInfo.containerLabel = container.getAttribute('aria-label');
+        }
     }
     
+    return fieldInfo;
+}
+
+function findWorkdayContainer(element) {
+    let parent = element.parentElement;
+    while (parent && !parent.matches('form')) {
+        if (parent.hasAttribute('data-automation-id')) {
+            return parent;
+        }
+        parent = parent.parentElement;
+    }
     return null;
 }
 
 function findFieldLabel(element) {
-    // Try to find label by for attribute
+    // Try explicit label
     if (element.id) {
         const label = document.querySelector(`label[for="${element.id}"]`);
         if (label) {
@@ -63,9 +81,21 @@ function findFieldLabel(element) {
         }
     }
     
-    // Try to find label in parent elements
+    // Try aria-label
+    const ariaLabel = element.getAttribute('aria-label');
+    if (ariaLabel) {
+        return ariaLabel.trim();
+    }
+    
+    // Try placeholder
+    const placeholder = element.getAttribute('placeholder');
+    if (placeholder) {
+        return placeholder.trim();
+    }
+    
+    // Try parent container label
     let parent = element.parentElement;
-    while (parent && parent.tagName !== 'FORM' && parent.tagName !== 'BODY') {
+    while (parent && !parent.matches('form')) {
         const label = parent.querySelector('label');
         if (label) {
             return label.textContent.trim();
@@ -73,137 +103,150 @@ function findFieldLabel(element) {
         parent = parent.parentElement;
     }
     
-    // Try aria-label
-    return element.getAttribute('aria-label') || '';
+    return '';
 }
 
-function autofillForm(profileData) {
-    console.log('Starting autofill with profile data:', profileData);
+function isVisible(element) {
+    return !!(element.offsetWidth || element.offsetHeight || element.getClientRects().length);
+}
+
+function autofillForm(profile, isWorkday) {
+    console.log('Starting autofill with profile:', profile);
     let filledCount = 0;
     
-    // Create status container
-    const statusContainer = document.createElement('div');
-    statusContainer.id = 'job-autofill-status';
-    statusContainer.style.position = 'fixed';
-    statusContainer.style.top = '20px';
-    statusContainer.style.right = '20px';
-    statusContainer.style.zIndex = '10000';
-    statusContainer.style.padding = '10px';
-    statusContainer.style.backgroundColor = '#fff';
-    statusContainer.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
-    statusContainer.style.borderRadius = '4px';
-    document.body.appendChild(statusContainer);
+    // Create status overlay
+    const overlay = createStatusOverlay();
     
-    const fields = analyzeFormFields();
+    // Analyze fields
+    const fields = analyzeFormFields(isWorkday);
     
+    // Process each field
     fields.forEach((field, index) => {
         setTimeout(() => {
-            const value = findMatchingProfileValue(field, profileData);
+            const value = findMatchingProfileValue(field, profile, isWorkday);
             if (value !== null) {
                 fillField(field.element, value);
                 filledCount++;
-                statusContainer.textContent = `Filling fields... (${filledCount}/${fields.length})`;
+                updateStatusOverlay(overlay, filledCount, fields.length);
             }
-        }, index * 100);
+        }, index * 100); // Stagger the fills
     });
     
-    // Remove status after completion
+    // Remove overlay after completion
     setTimeout(() => {
-        statusContainer.remove();
+        overlay.remove();
     }, (fields.length * 100) + 1000);
     
     return { success: true, filledCount };
 }
 
-function findMatchingProfileValue(field, profileData) {
-    const patterns = {
-        firstName: /first.*name|fname|given.*name/i,
-        lastName: /last.*name|lname|surname|family.*name/i,
-        email: /email|e-mail/i,
-        phone: /phone|mobile|cell/i,
-        address: /address|street/i,
-        city: /city|town/i,
-        state: /state|province/i,
-        zip: /zip|postal|postcode/i,
-        linkedin: /linkedin|social.*profile/i,
-        website: /website|portfolio|personal.*site/i,
-        summary: /summary|profile|about|objective/i
-    };
+function createStatusOverlay() {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #fff;
+        padding: 15px;
+        border-radius: 5px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        z-index: 10000;
+        font-family: -apple-system, system-ui, sans-serif;
+    `;
+    document.body.appendChild(overlay);
+    return overlay;
+}
+
+function updateStatusOverlay(overlay, current, total) {
+    overlay.textContent = `Filling fields: ${current}/${total}`;
+}
+
+function findMatchingProfileValue(field, profile, isWorkday) {
+    const identifiers = [
+        field.id,
+        field.name,
+        field.automationId,
+        field.fkitId,
+        field.label,
+        field.containerLabel
+    ].filter(Boolean).map(id => id.toLowerCase());
     
-    // Check field identifiers
-    for (const [key, pattern] of Object.entries(patterns)) {
-        if (
-            (field.id && pattern.test(field.id)) ||
-            (field.name && pattern.test(field.name)) ||
-            (field.automationId && pattern.test(field.automationId)) ||
-            (field.label && pattern.test(field.label))
-        ) {
-            // Return the corresponding value from profileData
-            return profileData[key] || '';
-        }
+    // First name patterns
+    if (identifiers.some(id => 
+        id.includes('first') && id.includes('name') ||
+        id.includes('firstname') ||
+        id.includes('given') && id.includes('name') ||
+        id === 'fname' ||
+        (isWorkday && id.includes('legalname--firstname'))
+    )) {
+        return profile.personal.firstName;
     }
     
-    // Check for employment history fields
-    if (profileData.employment && profileData.employment.length > 0) {
-        const mostRecent = profileData.employment[0];
-        
-        if (/company|employer|organization/i.test(field.label || field.name || field.id || '')) {
-            return mostRecent.company || '';
-        }
-        if (/title|position|role/i.test(field.label || field.name || field.id || '')) {
-            return mostRecent.job_title || '';
-        }
-        if (/responsibilities|duties|description/i.test(field.label || field.name || field.id || '')) {
-            return mostRecent.responsibilities || '';
-        }
+    // Last name patterns
+    if (identifiers.some(id => 
+        id.includes('last') && id.includes('name') ||
+        id.includes('lastname') ||
+        id.includes('family') && id.includes('name') ||
+        id === 'lname' ||
+        (isWorkday && id.includes('legalname--lastname'))
+    )) {
+        return profile.personal.lastName;
     }
     
-    // Check for education fields
-    if (profileData.education && profileData.education.length > 0) {
-        const mostRecent = profileData.education[0];
-        
-        if (/school|university|college|institution/i.test(field.label || field.name || field.id || '')) {
-            return mostRecent.school || '';
-        }
-        if (/degree|qualification/i.test(field.label || field.name || field.id || '')) {
-            return mostRecent.degree || '';
-        }
-        if (/major|field.*study|concentration/i.test(field.label || field.name || field.id || '')) {
-            return mostRecent.field_of_study || '';
-        }
+    // Email patterns
+    if (identifiers.some(id => 
+        id.includes('email') ||
+        id.includes('e-mail') ||
+        (isWorkday && id.includes('contact--email'))
+    )) {
+        return profile.personal.email;
+    }
+    
+    // Phone patterns
+    if (identifiers.some(id => 
+        id.includes('phone') ||
+        id.includes('mobile') ||
+        id.includes('cell') ||
+        (isWorkday && id.includes('contact--phone'))
+    )) {
+        return profile.personal.phone;
+    }
+    
+    // Address patterns
+    if (identifiers.some(id => 
+        id.includes('address') && !id.includes('email') ||
+        id.includes('street') ||
+        (isWorkday && id.includes('address--line1'))
+    )) {
+        return profile.personal.address;
+    }
+    
+    // LinkedIn patterns
+    if (identifiers.some(id => 
+        id.includes('linkedin') ||
+        id.includes('linked-in') ||
+        (isWorkday && id.includes('socialmedia--linkedin'))
+    )) {
+        return profile.personal.linkedin;
     }
     
     return null;
 }
 
 function fillField(element, value) {
-    // Highlight the field being filled
-    element.classList.add('job-autofill-highlight');
+    // Highlight the field
+    element.style.backgroundColor = '#e8f5e9';
     
     // Set the value
-    if (element.tagName === 'SELECT') {
-        const option = Array.from(element.options).find(opt => 
-            opt.text.toLowerCase().includes(value.toLowerCase())
-        );
-        if (option) {
-            element.value = option.value;
-        }
-    } else {
-        element.value = value;
-    }
+    element.value = value;
     
     // Trigger events
     element.dispatchEvent(new Event('input', { bubbles: true }));
     element.dispatchEvent(new Event('change', { bubbles: true }));
+    element.dispatchEvent(new Event('blur', { bubbles: true }));
     
-    // Show success state
+    // Remove highlight after animation
     setTimeout(() => {
-        element.classList.remove('job-autofill-highlight');
-        element.classList.add('job-autofill-success');
-        
-        // Remove success state after animation
-        setTimeout(() => {
-            element.classList.remove('job-autofill-success');
-        }, 1000);
-    }, 500);
+        element.style.backgroundColor = '';
+    }, 1000);
 } 

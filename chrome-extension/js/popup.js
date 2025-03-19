@@ -1,6 +1,6 @@
 // Configuration
-const API_BASE_URL = 'http://127.0.0.1:8080'; // Base URL for the Flask app
-let authToken = null;
+const API_BASE_URL = 'http://localhost:8080'; // Base URL for the Flask app
+let profileData = null;
 
 // DOM Elements - with correct references
 const profileStatus = document.getElementById('profile-status');
@@ -17,6 +17,7 @@ const autofillBtn = document.getElementById('autofill-btn'); // Fixed ID referen
 const loginFormContainer = document.getElementById('login-form-container');
 const profileInfo = document.getElementById('profile-info');
 const autofillActions = document.getElementById('autofill-actions');
+const connectionStatus = document.getElementById('connectionStatus');
 
 // Login Elements
 const loginSection = document.createElement('div');
@@ -35,7 +36,6 @@ loginSection.innerHTML = `
 `;
 
 // State
-let profile = null;
 let currentTab = null;
 let fieldMappings = {};
 let isLoggedIn = false;
@@ -131,49 +131,55 @@ const TEST_PASSWORD = 'password';
 // Initialize the popup when the DOM content is loaded
 document.addEventListener('DOMContentLoaded', function() {
   console.log('Popup initialized');
-  checkLoginStatus();
+  initializeUI();
   setupEventListeners();
 });
 
-// Check if user is logged in
-function checkLoginStatus() {
-  console.log('Checking login status...');
-  chrome.storage.local.get([LOGGED_IN_KEY, PROFILE_DATA_KEY], function(result) {
-    console.log('Login status:', result);
-    if (result[LOGGED_IN_KEY] === true && result[PROFILE_DATA_KEY]) {
-      // User is logged in and has profile data
-      console.log('User is logged in with profile data');
-      showProfileSection(result[PROFILE_DATA_KEY]);
-    } else {
-      // User is not logged in or missing profile data
-      console.log('User is not logged in or missing profile data');
-      showLoginSection();
-      
-      // For testing purposes, simulate a login with demo credentials
-      if (loginForm) {
-        document.getElementById('username').value = TEST_USERNAME;
-        document.getElementById('password').value = TEST_PASSWORD;
-      }
-    }
-  });
-}
-
-// Show profile section and hide login
-function showProfileSection(profileData) {
-  console.log('Showing profile section with data:', profileData);
-  if (loginFormContainer) loginFormContainer.style.display = 'none';
-  if (profileInfo) profileInfo.style.display = 'block';
-  if (autofillActions) autofillActions.style.display = 'block';
+// Initialize UI and fetch profile data
+async function initializeUI() {
+  const connectionStatus = document.getElementById('connectionStatus');
+  const autofillBtn = document.getElementById('autofill-btn');
   
-  updateProfileStatus(profileData);
-}
-
-// Show login section and hide profile
-function showLoginSection() {
-  console.log('Showing login section');
-  if (loginFormContainer) loginFormContainer.style.display = 'block';
-  if (profileInfo) profileInfo.style.display = 'none';
-  if (autofillActions) autofillActions.style.display = 'none';
+  try {
+    // Try to fetch profile data from Flask app
+    const response = await fetch(`${API_BASE_URL}/api/profile`);
+    if (response.ok) {
+      const data = await response.json();
+      profileData = {
+        personal: {
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          address: data.address || '',
+          linkedin: data.linkedin || '',
+          website: data.website || ''
+        },
+        employment: data.employment || [],
+        education: data.education || []
+      };
+      
+      connectionStatus.textContent = 'Connected to web app';
+      connectionStatus.className = 'status-indicator connected';
+      
+      // Store the profile data
+      chrome.storage.local.set({ 'profileData': profileData });
+    } else {
+      throw new Error('Failed to fetch profile data');
+    }
+  } catch (error) {
+    console.log('Error fetching profile data:', error);
+    connectionStatus.textContent = 'Using demo data (click to connect)';
+    connectionStatus.className = 'status-indicator demo';
+    
+    // Use demo data as fallback
+    profileData = DEMO_PROFILE;
+  }
+  
+  // Enable autofill button
+  if (autofillBtn) {
+    autofillBtn.disabled = false;
+  }
 }
 
 // Set up all event listeners
@@ -315,243 +321,67 @@ function updateProfileStatus(profileData) {
 
 // Handle analyze form button click
 function handleAnalyzeForm() {
-  console.log('Analyze form button clicked');
-  showMessage(mappingStatus, 'Analyzing form fields...', 'info');
-  
-  // Clear any previous mapping list
-  if (mappingList) {
-    mappingList.innerHTML = '';
-  }
+  const status = document.getElementById('status');
+  status.textContent = 'Analyzing form fields...';
+  status.className = 'info';
   
   chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-    console.log('Current tab:', tabs[0].id);
-    
-    const isWorkday = workdayModeToggle ? workdayModeToggle.checked : true;
-    console.log('Workday mode enabled:', isWorkday);
-    
     chrome.tabs.sendMessage(
       tabs[0].id,
-      { action: 'ANALYZE_FORM', isWorkday: isWorkday },
+      { 
+        action: 'ANALYZE_FORM',
+        isWorkday: document.getElementById('workday-mode-toggle').checked
+      },
       function(response) {
-        console.log('Response from content script:', response);
-        
-        // Check for errors
         if (chrome.runtime.lastError) {
-          console.error('Error:', chrome.runtime.lastError);
-          showMessage(mappingStatus, 
-            'Error: Could not connect to page. Make sure you\'re on a form page and try refreshing.', 
-            'error');
+          status.textContent = 'Error: Could not connect to page';
+          status.className = 'error';
           return;
         }
         
-        if (!response) {
-          console.error('No response from content script');
-          showMessage(mappingStatus, 
-            'No response from content script. Please refresh the page and try again.', 
-            'error');
-          return;
-        }
-        
-        const { fields } = response;
-        console.log('Fields detected:', fields);
-        
-        if (!fields || fields.length === 0) {
-          showMessage(mappingStatus, 'No form fields detected on this page.', 'warning');
-          return;
-        }
-        
-        // Update status
-        showMessage(mappingStatus, 
-          `${fields.length} form fields detected. Ready to autofill.`, 
-          'success');
-        
-        // Display the fields in the mapping list
-        if (mappingList) {
-          fields.forEach(field => {
-            console.log('Processing field:', field);
-            const item = document.createElement('li');
-            item.className = 'mapping-item';
-            
-            // Create field name element with bold styling
-            const fieldName = document.createElement('strong');
-            fieldName.textContent = field.label || field.name || field.id || field.type;
-            
-            // Create arrow element
-            const arrow = document.createElement('span');
-            arrow.textContent = ' → ';
-            
-            // Create mapped value element
-            const mappedValue = document.createElement('span');
-            
-            // Get profile data for mapping
-            chrome.storage.local.get([PROFILE_DATA_KEY], function(result) {
-              const profile = result[PROFILE_DATA_KEY] || DEMO_PROFILE;
-              const profileField = determineMappedProfileField(field, profile);
-              mappedValue.textContent = profileField || 'Unknown';
-              
-              // Add color indicators based on mapping status
-              if (profileField) {
-                item.classList.add('mapped');
-              } else {
-                item.classList.add('not-mapped');
-              }
-            });
-            
-            // Append all elements to the item
-            item.appendChild(fieldName);
-            item.appendChild(arrow);
-            item.appendChild(mappedValue);
-            
-            // Append item to the mapping list
-            mappingList.appendChild(item);
-          });
-        }
-        
-        // Show the field mapping section
-        if (fieldMappingSection) {
-          fieldMappingSection.style.display = 'block';
+        if (response && response.fields) {
+          status.textContent = `Found ${response.fields.length} fields. Ready to autofill.`;
+          status.className = 'success';
+          document.getElementById('autofill-btn').disabled = false;
+        } else {
+          status.textContent = 'No form fields found';
+          status.className = 'warning';
         }
       }
     );
   });
 }
 
-// Function to determine which profile field maps to a form field
-function determineMappedProfileField(field, profile) {
-  const { id = '', name = '', label = '', placeholder = '', automationId = '', fkitId = '' } = field;
-  
-  // Lowercase identifiers for case-insensitive matching
-  const identifiers = [
-    id.toLowerCase(),
-    name.toLowerCase(),
-    label.toLowerCase(),
-    placeholder.toLowerCase(),
-    automationId ? automationId.toLowerCase() : '',
-    fkitId ? fkitId.toLowerCase() : ''
-  ].filter(Boolean); // Remove empty strings
-  
-  console.log('Field identifiers:', identifiers);
-  
-  // Name fields
-  if (identifiers.some(id => id.includes('first'))) {
-    return `First Name (${profile.personal?.firstName})`;
-  }
-  
-  if (identifiers.some(id => id.includes('last'))) {
-    return `Last Name (${profile.personal?.lastName})`;
-  }
-  
-  if (identifiers.some(id => id === 'name' || id.includes('full name'))) {
-    return `Full Name (${profile.personal?.firstName} ${profile.personal?.lastName})`;
-  }
-  
-  // Contact info
-  if (identifiers.some(id => id.includes('email'))) {
-    return `Email (${profile.personal?.email})`;
-  }
-  
-  if (identifiers.some(id => id.includes('phone') || id.includes('mobile') || id.includes('cell'))) {
-    return `Phone (${profile.personal?.phone})`;
-  }
-  
-  // Address
-  if (identifiers.some(id => id.includes('address') && !id.includes('email'))) {
-    return `Address (${profile.personal?.address})`;
-  }
-  
-  // Professional profile
-  if (identifiers.some(id => id.includes('linkedin'))) {
-    return `LinkedIn (${profile.personal?.linkedin})`;
-  }
-  
-  if (identifiers.some(id => id.includes('website') || id.includes('portfolio'))) {
-    return `Website (${profile.personal?.website})`;
-  }
-  
-  // Education
-  if (identifiers.some(id => id.includes('school') || id.includes('university') || id.includes('college'))) {
-    return `School (${profile.education?.[0]?.school})`;
-  }
-  
-  if (identifiers.some(id => id.includes('degree'))) {
-    return `Degree (${profile.education?.[0]?.degree})`;
-  }
-  
-  // Work Experience
-  if (identifiers.some(id => id.includes('company') || id.includes('employer'))) {
-    return `Company (${profile.workExperience?.[0]?.company})`;
-  }
-  
-  if (identifiers.some(id => id.includes('job') || id.includes('position') || id.includes('title'))) {
-    return `Position (${profile.workExperience?.[0]?.position})`;
-  }
-  
-  // Skills
-  if (identifiers.some(id => id.includes('skill'))) {
-    return `Skills (${profile.skills?.join(', ')})`;
-  }
-  
-  return null;
-}
-
 // Handle autofill button click
 function handleAutofill() {
-  console.log('Autofill button clicked');
-  showMessage(autofillStatus, 'Autofilling form...', 'info');
+  const status = document.getElementById('status');
+  status.textContent = 'Filling form fields...';
+  status.className = 'info';
   
-  chrome.storage.local.get([PROFILE_DATA_KEY], function(result) {
-    const profile = result[PROFILE_DATA_KEY] || DEMO_PROFILE;
-    console.log('Using profile for autofill:', profile);
-    
-    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-      const isWorkday = workdayModeToggle ? workdayModeToggle.checked : true;
-      console.log('Workday mode enabled for autofill:', isWorkday);
-      
-      chrome.tabs.sendMessage(
-        tabs[0].id,
-        { 
-          action: 'AUTOFILL_FORM',
-          profile: profile,
-          isWorkday: isWorkday
-        },
-        function(response) {
-          console.log('Autofill response:', response);
-          
-          // Check for errors
-          if (chrome.runtime.lastError) {
-            console.error('Error:', chrome.runtime.lastError);
-            showMessage(autofillStatus, 
-              'Error: Could not connect to page. Make sure you\'re on a form page and try refreshing.', 
-              'error');
-            return;
-          }
-          
-          if (!response) {
-            console.error('No response from content script');
-            showMessage(autofillStatus, 
-              'No response from content script. Please refresh the page and try again.', 
-              'error');
-            return;
-          }
-          
-          const { success, fieldsFilledCount } = response;
-          
-          if (success && fieldsFilledCount > 0) {
-            showMessage(autofillStatus, 
-              `Success! ${fieldsFilledCount} fields were filled.`, 
-              'success');
-          } else if (success && fieldsFilledCount === 0) {
-            showMessage(autofillStatus, 
-              'No fields were filled. Try running "Analyze Form" first.', 
-              'warning');
-          } else {
-            showMessage(autofillStatus, 
-              'Autofill failed. Please try again.', 
-              'error');
-          }
+  chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+    chrome.tabs.sendMessage(
+      tabs[0].id,
+      { 
+        action: 'AUTOFILL_FORM',
+        profile: profileData,
+        isWorkday: document.getElementById('workday-mode-toggle').checked
+      },
+      function(response) {
+        if (chrome.runtime.lastError) {
+          status.textContent = 'Error: Could not connect to page';
+          status.className = 'error';
+          return;
         }
-      );
-    });
+        
+        if (response && response.success) {
+          status.textContent = `Successfully filled ${response.filledCount} fields`;
+          status.className = 'success';
+        } else {
+          status.textContent = 'Failed to fill form fields';
+          status.className = 'error';
+        }
+      }
+    );
   });
 }
 

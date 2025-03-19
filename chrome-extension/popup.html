@@ -7,38 +7,32 @@
   <link rel="stylesheet" href="css/popup.css">
 </head>
 <body>
-  <header>
-    <h1>Job Application Autofill</h1>
-  </header>
-  
   <div class="container">
+    <h1>Job Application Autofill</h1>
+    
     <div id="connectionStatus" class="status-indicator">
       Checking connection to web app...
     </div>
     
     <div class="form-group">
       <label class="toggle-switch">
-        <input type="checkbox" id="workdayMode">
+        <input type="checkbox" id="workdayMode" checked>
         <span class="slider"></span>
         <span class="label">Workday Mode</span>
       </label>
     </div>
     
     <div class="button-group">
-      <button id="analyzeForm">Analyze Form</button>
-      <button id="autofill" disabled>Autofill</button>
+      <button id="analyzeForm" class="btn btn-primary">Analyze Form</button>
+      <button id="autofill" class="btn btn-success" disabled>Autofill</button>
     </div>
     
     <div id="status" class="status"></div>
     
     <div class="footer">
-      <a href="http://localhost:8080/dashboard" target="_blank">Edit Profile</a>
+      <a href="http://localhost:8080/profile" target="_blank" class="btn btn-outline">Edit Profile</a>
     </div>
   </div>
-  
-  <footer>
-    <p>Job Application Autofill Extension - v1.0</p>
-  </footer>
   
   <script src="js/popup.js"></script>
 </body>
