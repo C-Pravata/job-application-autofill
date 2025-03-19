@@ -4,12 +4,12 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   
   if (message.action === 'ANALYZE_FORM') {
     // Analyze the form fields on the page
-    const fields = analyzeFormFields();
+    const fields = analyzeFormFields(message.isWorkday);
     console.log('Analyzed fields:', fields);
     sendResponse({ fields });
   } else if (message.action === 'AUTOFILL_FORM') {
     // Autofill the form using the provided profile data
-    const result = autofillForm(message.profile);
+    const result = autofillForm(message.profile, message.isWorkday);
     console.log('Autofill result:', result);
     sendResponse({ 
       success: result.success, 
@@ -22,7 +22,12 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
 });
 
 // Function to analyze form fields on the page
-function analyzeFormFields() {
+function analyzeFormFields(isWorkday = false) {
+  // If it's a Workday site, use special handling
+  if (isWorkday) {
+    return analyzeWorkdayForm();
+  }
+  
   // Find all forms on the page
   const forms = document.querySelectorAll('form');
   console.log(`Found ${forms.length} forms on the page`);
@@ -40,6 +45,98 @@ function analyzeFormFields() {
   });
   
   return allFields;
+}
+
+// Special function to analyze Workday forms
+function analyzeWorkdayForm() {
+  console.log('Analyzing Workday form...');
+  let fields = [];
+  
+  // Look for Workday specific elements
+  // Workday typically uses specific CSS classes or data attributes
+  
+  // First try to find Workday input fields
+  const workdayInputs = document.querySelectorAll('input[data-automation-id], select[data-automation-id], textarea[data-automation-id]');
+  if (workdayInputs.length > 0) {
+    console.log(`Found ${workdayInputs.length} Workday inputs with data-automation-id`);
+    workdayInputs.forEach(input => {
+      if (isRelevantField(input)) {
+        fields.push(extractWorkdayFieldInfo(input));
+      }
+    });
+  }
+  
+  // If we didn't find Workday specific elements, try other Workday selectors
+  if (fields.length === 0) {
+    // Try to find inputs within Workday container elements
+    const workdayContainers = document.querySelectorAll('.css-1mjrxw9, .css-1pvqt7v, .css-1dqr5u3');
+    workdayContainers.forEach(container => {
+      const inputs = container.querySelectorAll('input, select, textarea');
+      inputs.forEach(input => {
+        if (isRelevantField(input)) {
+          fields.push(extractWorkdayFieldInfo(input));
+        }
+      });
+    });
+  }
+  
+  // If we still don't have any fields, fallback to regular analysis
+  if (fields.length === 0) {
+    console.log('No Workday-specific fields found, trying regular analysis');
+    return analyzeInputsDirectly();
+  }
+  
+  return fields;
+}
+
+// Extract Workday specific field information
+function extractWorkdayFieldInfo(field) {
+  const fieldInfo = extractFieldInfo(field);
+  
+  // Add Workday-specific attributes
+  const automationId = field.getAttribute('data-automation-id');
+  if (automationId) {
+    fieldInfo.automationId = automationId;
+  }
+  
+  // Look for Workday label
+  const label = getWorkdayFieldLabel(field);
+  if (label && !fieldInfo.label) {
+    fieldInfo.label = label;
+  }
+  
+  return fieldInfo;
+}
+
+// Get label for Workday field
+function getWorkdayFieldLabel(field) {
+  // Workday often uses labels with specific classes
+  let label = '';
+  
+  // Try to find a label based on automation ID
+  const automationId = field.getAttribute('data-automation-id');
+  if (automationId) {
+    // Look for label with matching automation ID
+    const labelElement = document.querySelector(`label[data-automation-id="${automationId}-label"]`);
+    if (labelElement) {
+      return labelElement.textContent.trim();
+    }
+  }
+  
+  // Try to find a label in the parent containers
+  let current = field.parentElement;
+  while (current && current !== document.body) {
+    // Look for Workday label classes
+    const labelElement = current.querySelector('.css-1osrkz3, .css-16u8zxh, .css-1qajm9i');
+    if (labelElement) {
+      return labelElement.textContent.trim();
+    }
+    
+    // Move up the DOM tree
+    current = current.parentElement;
+  }
+  
+  return label;
 }
 
 // Function to analyze inputs directly (not in forms)
@@ -128,12 +225,24 @@ function getFieldLabel(field) {
     parent = parent.parentElement;
   }
   
+  // If no label found, try to find a nearby label-like element
+  const closestContainer = field.closest('div, fieldset, section');
+  if (closestContainer) {
+    // Look for elements that might be labels
+    const possibleLabels = closestContainer.querySelectorAll('label, legend, div[class*="label"], span[class*="label"], div.field-label, .form-label');
+    for (const labelElement of possibleLabels) {
+      if (!labelElement.contains(field) && labelElement.textContent.trim()) {
+        return labelElement.textContent.trim();
+      }
+    }
+  }
+  
   // If no label found, try using the field's name, id, placeholder, or aria-label
   return field.ariaLabel || field.placeholder || field.name || field.id || '';
 }
 
 // Autofill form with profile data
-function autofillForm(profile) {
+function autofillForm(profile, isWorkday = false) {
   // Create a container for the status indicator
   const statusContainer = document.createElement('div');
   statusContainer.id = 'job-autofill-status';
@@ -150,8 +259,8 @@ function autofillForm(profile) {
   statusContainer.textContent = 'Analyzing form fields...';
   document.body.appendChild(statusContainer);
   
-  // Analyze the form fields
-  const fields = analyzeFormFields();
+  // Analyze the form fields based on site type
+  const fields = isWorkday ? analyzeWorkdayForm() : analyzeFormFields();
   
   if (fields.length === 0) {
     statusContainer.textContent = 'No form fields detected.';
@@ -209,7 +318,7 @@ function autofillForm(profile) {
       
       // Fill field with appropriate value from profile
       setTimeout(() => {
-        const filled = fillField(fieldElement, field, profile);
+        const filled = fillField(fieldElement, field, profile, isWorkday);
         
         if (filled) {
           fieldElement.classList.add('job-autofill-success');
@@ -236,11 +345,13 @@ function autofillForm(profile) {
 }
 
 // Fill a specific field based on its characteristics and profile data
-function fillField(fieldElement, fieldInfo, profile) {
+function fillField(fieldElement, fieldInfo, profile, isWorkday = false) {
   // Determine what value to use based on field characteristics
-  const valueToUse = determineValueToUse(fieldInfo, profile);
+  const valueToUse = isWorkday ? 
+    determineValueForWorkday(fieldInfo, profile) : 
+    determineValueToUse(fieldInfo, profile);
   
-  if (!valueToUse) {
+  if (!valueToUse && valueToUse !== false) {
     // No matching value found for this field
     return false;
   }
@@ -344,15 +455,121 @@ function fillField(fieldElement, fieldInfo, profile) {
       }
     }
     
-    // Trigger change event to notify the form
-    fieldElement.dispatchEvent(new Event('input', { bubbles: true }));
-    fieldElement.dispatchEvent(new Event('change', { bubbles: true }));
+    // For Workday forms, we need to simulate user interaction more thoroughly
+    if (isWorkday) {
+      // Focus the field first
+      fieldElement.focus();
+      
+      // Dispatch multiple events to ensure the change is recognized
+      fieldElement.dispatchEvent(new Event('input', { bubbles: true }));
+      fieldElement.dispatchEvent(new Event('change', { bubbles: true }));
+      fieldElement.dispatchEvent(new Event('blur', { bubbles: true }));
+      
+      // For Workday, sometimes we need to trigger click events on the input
+      if (fieldInfo.type === 'text' || fieldInfo.type === 'email' || fieldInfo.type === 'tel') {
+        fieldElement.click();
+      }
+    } else {
+      // Standard form event triggering
+      fieldElement.dispatchEvent(new Event('input', { bubbles: true }));
+      fieldElement.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     
     return true;
   } catch (error) {
     console.error('Error filling field:', error);
     return false;
   }
+}
+
+// Special function for determining values in Workday forms
+function determineValueForWorkday(fieldInfo, profile) {
+  // Extract identifiers for matching
+  const { id = '', name = '', label = '', placeholder = '', automationId = '' } = fieldInfo;
+  
+  // Lowercase identifiers for case-insensitive matching
+  const identifiers = [
+    id.toLowerCase(),
+    name.toLowerCase(),
+    label.toLowerCase(),
+    placeholder.toLowerCase(),
+    automationId ? automationId.toLowerCase() : ''
+  ].filter(Boolean); // Remove empty strings
+  
+  // Check for specific Workday field patterns
+  
+  // Name fields
+  if (identifiers.some(id => id.includes('first'))) {
+    return profile.personal?.firstName || '';
+  }
+  
+  if (identifiers.some(id => id.includes('last'))) {
+    return profile.personal?.lastName || '';
+  }
+  
+  if (identifiers.some(id => id === 'name' || id.includes('full name'))) {
+    return `${profile.personal?.firstName || ''} ${profile.personal?.lastName || ''}`.trim();
+  }
+  
+  // Contact info
+  if (identifiers.some(id => id.includes('email'))) {
+    return profile.personal?.email || '';
+  }
+  
+  if (identifiers.some(id => id.includes('phone') || id.includes('mobile') || id.includes('cell'))) {
+    return profile.personal?.phone || '';
+  }
+  
+  // Address
+  if (identifiers.some(id => id.includes('address') && !id.includes('email'))) {
+    return profile.personal?.address || '';
+  }
+  
+  // Professional profile
+  if (identifiers.some(id => id.includes('linkedin'))) {
+    return profile.personal?.linkedin || '';
+  }
+  
+  if (identifiers.some(id => id.includes('website') || id.includes('portfolio'))) {
+    return profile.personal?.website || '';
+  }
+  
+  // Education - simplified for Workday
+  if (identifiers.some(id => 
+    id.includes('school') || 
+    id.includes('university') || 
+    id.includes('college') || 
+    id.includes('education institution'))) {
+    return profile.education?.[0]?.school || '';
+  }
+  
+  if (identifiers.some(id => id.includes('degree'))) {
+    return profile.education?.[0]?.degree || '';
+  }
+  
+  if (identifiers.some(id => id.includes('major') || id.includes('field of study'))) {
+    return profile.education?.[0]?.fieldOfStudy || '';
+  }
+  
+  if (identifiers.some(id => id.includes('gpa'))) {
+    return profile.education?.[0]?.gpa || '';
+  }
+  
+  // Work experience
+  if (identifiers.some(id => id.includes('company') || id.includes('employer'))) {
+    return profile.workExperience?.[0]?.company || '';
+  }
+  
+  if (identifiers.some(id => id.includes('job title') || id.includes('position'))) {
+    return profile.workExperience?.[0]?.position || '';
+  }
+  
+  if (identifiers.some(id => id.includes('job description') || id.includes('responsibilities'))) {
+    return profile.workExperience?.[0]?.description || '';
+  }
+  
+  // Catchall for generic fields
+  return determineValueToUse(fieldInfo, profile);
 }
 
 // Determine what value to use for a field based on profile data
