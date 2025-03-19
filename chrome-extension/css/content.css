@@ -1,14 +1,17 @@
 /* Highlight fields that will be autofilled */
 .job-autofill-highlight {
   border: 2px solid #4CAF50 !important;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease !important;
-  box-shadow: 0 0 10px rgba(76, 175, 80, 0.5) !important;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.4) !important;
+  transition: all 0.3s ease !important;
   z-index: 9999 !important;
   position: relative !important;
 }
 
 /* Success indicator */
 .job-autofill-success {
+  border: 2px solid #2196F3 !important;
+  box-shadow: 0 0 8px rgba(33, 150, 243, 0.4) !important;
+  transition: all 0.3s ease !important;
   position: relative !important;
   animation: autofill-pulse 1s ease-in-out !important;
 }
@@ -150,4 +153,10 @@
   100% {
     box-shadow: 0 0 0 0 rgba(220, 53, 69, 0) !important;
   }
+}
+
+#job-autofill-status {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
 } 
