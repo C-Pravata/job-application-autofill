@@ -134,7 +134,6 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Get correct references to DOM elements
   const connectionStatus = document.getElementById('connectionStatus');
-  const useDemoDataToggle = document.getElementById('useDemoData');
   const workdayModeToggle = document.getElementById('workdayMode');
   const analyzeFormBtn = document.getElementById('analyzeForm'); // Matches HTML ID
   const autofillBtn = document.getElementById('autofill'); // Matches HTML ID
@@ -143,7 +142,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // Debug element references
   console.log('DOM Elements found:', {
     connectionStatus: !!connectionStatus,
-    useDemoDataToggle: !!useDemoDataToggle,
     workdayModeToggle: !!workdayModeToggle,
     analyzeFormBtn: !!analyzeFormBtn,
     autofillBtn: !!autofillBtn,
@@ -176,16 +174,6 @@ document.addEventListener('DOMContentLoaded', function() {
     handleAutofill();
   });
   
-  // Add event listener for data source toggle
-  if (useDemoDataToggle) {
-    useDemoDataToggle.addEventListener('change', function() {
-      const isChecked = useDemoDataToggle.checked;
-      console.log('Demo data toggle changed:', isChecked);
-      chrome.storage.local.set({ 'useDemoData': isChecked });
-      updateSelectedProfileData(isChecked, appProfileData, DEMO_PROFILE, status);
-    });
-  }
-  
   // Add event listener for workday mode toggle
   if (workdayModeToggle) {
     workdayModeToggle.addEventListener('change', function() {
@@ -196,17 +184,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   // Load saved preferences
-  chrome.storage.local.get(['useDemoData', 'workdayMode'], function(result) {
+  chrome.storage.local.get(['workdayMode'], function(result) {
     console.log('Loaded saved preferences:', result);
-    
-    if (useDemoDataToggle && result.useDemoData !== undefined) {
-      useDemoDataToggle.checked = result.useDemoData;
-      console.log('Set useDemoData toggle to:', result.useDemoData);
-    } else if (useDemoDataToggle) {
-      // Default to using demo data if not set
-      useDemoDataToggle.checked = true;
-      console.log('Set useDemoData toggle to default true');
-    }
     
     if (workdayModeToggle && result.workdayMode !== undefined) {
       workdayModeToggle.checked = result.workdayMode;
@@ -216,14 +195,6 @@ document.addEventListener('DOMContentLoaded', function() {
       workdayModeToggle.checked = true;
       console.log('Set workdayMode toggle to default true');
     }
-    
-    // Update profile data based on saved preferences
-    updateSelectedProfileData(
-      useDemoDataToggle ? useDemoDataToggle.checked : true,
-      appProfileData,
-      DEMO_PROFILE,
-      status
-    );
   });
   
   // Function to initialize UI and fetch profile data
@@ -284,6 +255,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Store the app profile data
         chrome.storage.local.set({ 'appProfileData': appProfileData });
         console.log('Stored app profile data in local storage');
+        
+        // Set the profile data
+        profileData = appProfileData;
+        
+        if (status) {
+          status.textContent = 'Profile loaded. Ready to analyze form fields';
+          status.className = 'status info';
+        }
       } else {
         throw new Error(`Failed to fetch profile data: ${response.status} ${response.statusText}`);
       }
@@ -295,57 +274,9 @@ document.addEventListener('DOMContentLoaded', function() {
         connectionStatus.className = 'status-indicator disconnected';
       }
       
-      console.log('Using demo data as fallback');
-    }
-    
-    // Update the active profile data based on toggle
-    const useDemoData = useDemoDataToggle ? useDemoDataToggle.checked : true;
-    updateSelectedProfileData(useDemoData, appProfileData, DEMO_PROFILE, status);
-  }
-  
-  // Update which profile data is being used based on toggle
-  function updateSelectedProfileData(useDemoData, appData, demoData, statusElement) {
-    if (useDemoData) {
-      // Use demo data
-      profileData = demoData;
-      console.log('Using demo profile data:', profileData);
-      
-      if (statusElement) {
-        statusElement.textContent = 'Ready to analyze form fields';
-        statusElement.className = 'status info';
-      }
-      
-      if (connectionStatus) {
-        connectionStatus.textContent = 'Michael Jordan (Demo Profile)';
-        connectionStatus.className = 'status-indicator demo';
-      }
-    } else if (appData) {
-      // Use app data
-      profileData = appData;
-      console.log('Using app profile data:', profileData);
-      
-      if (statusElement) {
-        statusElement.textContent = 'Ready to analyze form fields';
-        statusElement.className = 'status info';
-      }
-    } else {
-      // If app data is not available, fall back to demo even if toggle is off
-      profileData = demoData;
-      console.log('App data not available, falling back to demo data');
-      
-      if (statusElement) {
-        statusElement.textContent = 'Web app unavailable, using demo profile';
-        statusElement.className = 'status info';
-      }
-      
-      if (useDemoDataToggle && !useDemoDataToggle.checked) {
-        useDemoDataToggle.checked = true;
-        console.log('Forced demo data toggle to true due to missing app data');
-      }
-      
-      if (connectionStatus) {
-        connectionStatus.textContent = 'Michael Jordan (Demo Profile)';
-        connectionStatus.className = 'status-indicator demo';
+      if (status) {
+        status.textContent = 'Error: Could not connect to web app. Please ensure the web app is running.';
+        status.className = 'status error';
       }
     }
   }
@@ -427,18 +358,83 @@ document.addEventListener('DOMContentLoaded', function() {
     status.textContent = 'Filling form fields...';
     status.className = 'status info';
     
-    // Make sure we have the correct profile data
-    const useDemoData = useDemoDataToggle ? useDemoDataToggle.checked : true;
-    updateSelectedProfileData(useDemoData, appProfileData, DEMO_PROFILE, status);
-    
-    // Ensure we have profile data to send
+    // If profile data is not available, try to refresh it from the API
     if (!profileData || !profileData.personal) {
-      console.error('No valid profile data available for autofill');
-      status.textContent = 'Error: No profile data available';
-      status.className = 'status error';
+      status.textContent = 'No profile data available. Refreshing...';
+      status.className = 'status warning';
+      
+      // Try to reload profile data
+      fetch(`${API_BASE_URL}/api/profile`)
+        .then(response => {
+          if (response.ok) return response.json();
+          throw new Error('Failed to fetch profile data');
+        })
+        .then(data => {
+          // Process the data and continue with autofill
+          processProfileDataAndAutofill(data);
+        })
+        .catch(error => {
+          console.error('Error refreshing profile data:', error);
+          status.textContent = 'Error: Could not load profile data. Make sure the web app is running.';
+          status.className = 'status error';
+        });
       return;
     }
     
+    // If we have profile data, proceed with autofill
+    performAutofill();
+  }
+  
+  // Helper function to process profile data and then autofill
+  function processProfileDataAndAutofill(data) {
+    appProfileData = {
+      personal: {
+        firstName: data.firstName || '',
+        lastName: data.lastName || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        address: data.address || '',
+        linkedin: data.linkedin || '',
+        website: data.website || ''
+      },
+      workExperience: [],
+      education: []
+    };
+    
+    // Convert employment to workExperience format
+    if (data.employment && data.employment.length > 0) {
+      appProfileData.workExperience = data.employment.map(job => ({
+        company: job.company || '',
+        position: job.job_title || '',
+        startDate: job.start_date || '',
+        endDate: job.end_date || '',
+        description: job.responsibilities || ''
+      }));
+    }
+    
+    // Convert education to the right format
+    if (data.education && data.education.length > 0) {
+      appProfileData.education = data.education.map(edu => ({
+        school: edu.institution || '',
+        degree: edu.degree || '',
+        fieldOfStudy: edu.field_of_study || '',
+        startDate: edu.start_date || '',
+        endDate: edu.end_date || '',
+        gpa: edu.gpa || ''
+      }));
+    }
+    
+    // Store the app profile data
+    chrome.storage.local.set({ 'appProfileData': appProfileData });
+    
+    // Set the profile data
+    profileData = appProfileData;
+    
+    // Now perform the autofill
+    performAutofill();
+  }
+  
+  function performAutofill() {
     console.log('Using profile data for autofill:', profileData);
     
     chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
