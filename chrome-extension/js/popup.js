@@ -217,6 +217,9 @@ document.addEventListener('DOMContentLoaded', function() {
             email: data.email || '',
             phone: data.phone || '',
             address: data.address || '',
+            city: data.city || '',
+            state: data.state || '',
+            zip: data.zip || '',
             linkedin: data.linkedin || '',
             website: data.website || ''
           },
@@ -255,6 +258,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Store the app profile data
         chrome.storage.local.set({ 'appProfileData': appProfileData });
         console.log('Stored app profile data in local storage');
+        console.log('Personal data includes:', appProfileData.personal);
         
         // Set the profile data
         profileData = appProfileData;
@@ -394,6 +398,9 @@ document.addEventListener('DOMContentLoaded', function() {
         email: data.email || '',
         phone: data.phone || '',
         address: data.address || '',
+        city: data.city || '',
+        state: data.state || '',
+        zip: data.zip || '',
         linkedin: data.linkedin || '',
         website: data.website || ''
       },

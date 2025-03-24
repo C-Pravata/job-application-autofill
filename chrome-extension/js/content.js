@@ -285,78 +285,67 @@ function isVisible(element) {
 }
 
 function autofillForm(profile, isWorkday) {
-    console.log('Starting autofill with profile:', profile);
+    console.log('Starting autofill with profile data:', JSON.stringify(profile.personal, null, 2));
+    console.log('Workday mode is enabled:', isWorkday);
     
     if (!profile || !profile.personal) {
-        console.error('Invalid profile data:', profile);
-        return { success: false, error: 'Invalid profile data', filledCount: 0 };
+        console.error('No profile data provided for autofill');
+        return { success: false, error: 'No profile data provided', filledCount: 0 };
     }
     
-    // Create status overlay
+    // Analyze form fields first
+    const fields = analyzeFormFields(isWorkday);
+    if (!fields || fields.length === 0) {
+        console.warn('No form fields found to autofill');
+        return { success: false, error: 'No form fields found to autofill', filledCount: 0 };
+    }
+    
+    console.log(`Found ${fields.length} form fields for autofill`);
+    
+    // Create a status overlay
     const overlay = createStatusOverlay();
     let filledCount = 0;
-    let totalFields = 0;
     
-    try {
-        // Analyze fields
-        const fields = analyzeFormFields(isWorkday);
-        if (!fields || fields.length === 0) {
-            overlay.textContent = 'No fields found to fill';
-            setTimeout(() => overlay.remove(), 3000);
-            return { success: true, filledCount: 0, message: 'No fields found' };
+    // Try to autofill each field
+    fields.forEach((field, index) => {
+        try {
+            // Update the status overlay
+            updateStatusOverlay(overlay, index + 1, fields.length);
+            
+            // Highlight the field being processed
+            field.element.classList.add('job-autofill-highlight');
+            
+            // Find a matching value for this field from the profile
+            const value = findMatchingProfileValue(field, profile, isWorkday);
+            console.log(`Field ${index+1}/${fields.length} - ${field.id || field.name || 'unnamed'}: matched value = ${value}`);
+            
+            // If a value was found, fill the field
+            if (value !== null && value !== undefined) {
+                fillField(field.element, value);
+                field.element.classList.add('job-autofill-success');
+                field.element.classList.remove('job-autofill-highlight');
+                filledCount++;
+                console.log(`Successfully filled field ${field.id || field.name || 'unnamed'} with value: ${value}`);
+            } else {
+                field.element.classList.remove('job-autofill-highlight');
+                console.log(`No matching profile value found for field ${field.id || field.name || 'unnamed'}`);
+            }
+        } catch (error) {
+            console.error(`Error autofilling field ${field.id || field.name || 'unnamed'}:`, error);
+            field.element.classList.remove('job-autofill-highlight');
         }
         
-        totalFields = fields.length;
-        
-        // Process each field
-        fields.forEach((field, index) => {
-            setTimeout(() => {
-                try {
-                    // Ensure the element is still in the DOM
-                    if (!document.contains(field.element)) {
-                        console.warn('Field element is no longer in the DOM:', field);
-                        return;
-                    }
-                    
-                    console.log(`Processing field ${index + 1}/${totalFields}:`, field);
-                    
-                    // Find a matching value from the profile
-                    const value = findMatchingProfileValue(field, profile, isWorkday);
-                    console.log('Matched profile value:', value);
-                    
-                    if (value !== null && value !== '') {
-                        const success = fillField(field.element, value);
-                        if (success) {
-                            filledCount++;
-                            console.log(`Successfully filled field ${index + 1} with "${value}"`);
-                            updateStatusOverlay(overlay, filledCount, totalFields);
-                        } else {
-                            console.warn(`Failed to fill field ${index + 1}`);
-                        }
-                    } else {
-                        console.log(`No matching value found for field ${index + 1}`);
-                    }
-                } catch (error) {
-                    console.error(`Error processing field ${index + 1}:`, error);
-                }
-            }, index * 150); // Stagger the fills with a delay
-        });
-        
-        // Remove overlay after completion
-        setTimeout(() => {
-            overlay.textContent = `Job Autofill Complete: ${filledCount}/${totalFields} fields filled`;
-            setTimeout(() => {
-                overlay.remove();
-            }, 2000);
-        }, (totalFields * 150) + 1000);
-        
-        return { success: true, filledCount, totalFields };
-    } catch (error) {
-        console.error('Error in autofill process:', error);
-        overlay.textContent = `Error: ${error.message}`;
-        setTimeout(() => overlay.remove(), 3000);
-        return { success: false, error: error.message, filledCount };
-    }
+        // Add small delay to make the process visible to the user
+        setTimeout(() => {}, 50);
+    });
+    
+    // Remove the overlay after a short delay
+    setTimeout(() => {
+        document.body.removeChild(overlay);
+    }, 1500);
+    
+    console.log(`Autofill complete: ${filledCount}/${fields.length} fields filled`);
+    return { success: true, filledCount: filledCount };
 }
 
 function createStatusOverlay() {
@@ -401,30 +390,50 @@ function updateStatusOverlay(overlay, current, total) {
 function findMatchingProfileValue(field, profile, isWorkday) {
     // Skip fields that already have values unless they're empty strings
     if (field.element.value && field.element.value.trim() !== '') {
-        console.log(`Skipping field with existing value: "${field.element.value}"`);
+        console.log('Field already has a value, skipping');
         return null;
     }
-    
-    // Gather all identifiers from the field
+
+    // Get all identifiers for this field
     const identifiers = [
-        field.id,
-        field.name,
-        field.label,
-        field.placeholder,
-        field.ariaLabel,
-        field.automationId,
-        field.fkitId,
-        field.containerLabel,
-        field.containerAutomationId,
-        field.containerFkitId,
-        field.fieldName,
-        field.fieldGroup
-    ]
-    .filter(Boolean) // Remove null/undefined values
-    .map(id => id.toLowerCase()) // Convert all to lowercase
-    .filter(id => id.length > 0); // Remove empty strings
+        field.id.toLowerCase(),
+        field.name.toLowerCase(),
+        field.label.toLowerCase(),
+        field.placeholder.toLowerCase(),
+        field.ariaLabel.toLowerCase(),
+        field.automationId.toLowerCase(),
+        field.className.toLowerCase()
+    ].filter(id => id !== '');
+
+    console.log('Checking field with identifiers:', identifiers);
     
-    console.log('Field identifiers for matching:', identifiers);
+    // Workday-specific address components
+    // These are commonly used in Workday application forms
+    if (isWorkday) {
+        // Check for address line patterns specific to Workday
+        if (identifiers.some(id => id.includes('address--addressline1') || id.includes('address--line1'))) {
+            console.log(`Found Workday address line 1 match for "${profile.personal.address}"`);
+            return profile.personal.address;
+        }
+        
+        // Check for city patterns specific to Workday
+        if (identifiers.some(id => id.includes('address--city'))) {
+            console.log(`Found Workday city match for "${profile.personal.city}"`);
+            return profile.personal.city;
+        }
+        
+        // Check for state/region patterns specific to Workday
+        if (identifiers.some(id => id.includes('address--state') || id.includes('address--region'))) {
+            console.log(`Found Workday state match for "${profile.personal.state}"`);
+            return profile.personal.state;
+        }
+        
+        // Check for postal code patterns specific to Workday
+        if (identifiers.some(id => id.includes('address--postalcode') || id.includes('address--zipcode'))) {
+            console.log(`Found Workday postal code match for "${profile.personal.zip}"`);
+            return profile.personal.zip;
+        }
+    }
     
     // First name - high priority match
     if (matchesPattern(identifiers, [
@@ -479,6 +488,39 @@ function findMatchingProfileValue(field, profile, isWorkday) {
     ]) && !matchesPattern(identifiers, ['email', 'mail'])) {
         console.log(`Found address match for "${profile.personal.address}"`);
         return profile.personal.address;
+    }
+    
+    // City
+    if (matchesPattern(identifiers, [
+        'city', 'town', 'municipality', 'city name', 'cityname', 'address--city'
+    ])) {
+        console.log(`Found city match for "${profile.personal.city}"`);
+        return profile.personal.city;
+    }
+    
+    // State/Province
+    if (matchesPattern(identifiers, [
+        'state', 'province', 'region', 'state/province', 'state name', 'administrative area',
+        'address--state', 'address--region'
+    ])) {
+        console.log(`Found state match for "${profile.personal.state}"`);
+        return profile.personal.state;
+    }
+    
+    // Zip/Postal Code
+    if (matchesPattern(identifiers, [
+        'zip', 'zipcode', 'zip code', 'zip-code', 'postal', 'postalcode', 'postal code',
+        'postal-code', 'address--postalcode', 'address--zipcode'
+    ])) {
+        console.log(`Found postal/zip code match for "${profile.personal.zip}"`);
+        return profile.personal.zip;
+    }
+    
+    // Country
+    if (matchesPattern(identifiers, [
+        'country', 'nation', 'country name', 'countryname', 'address--country'
+    ])) {
+        return "United States";
     }
     
     // LinkedIn URL
@@ -586,6 +628,9 @@ function matchesPattern(identifiers, patterns) {
     
     return identifiers.some(id => {
         if (!id) return false;
+        
+        // Case-insensitive matching
+        id = id.toLowerCase();
         
         // Check for exact matches
         if (patterns.includes(id)) {
