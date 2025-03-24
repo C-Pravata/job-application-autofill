@@ -52,6 +52,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // Keep the message channel open for async response
 });
 
+// Keep track of filled fields to prevent duplicate filling
+const filledFields = new Set();
+
 function analyzeFormFields(isWorkday) {
     console.log('Analyzing form fields with Workday mode:', isWorkday);
     const fields = [];
@@ -288,6 +291,9 @@ function autofillForm(profile, isWorkday) {
     console.log('Starting autofill with profile data:', JSON.stringify(profile.personal, null, 2));
     console.log('Workday mode is enabled:', isWorkday);
     
+    // Clear the filled fields set at the start of each autofill operation
+    filledFields.clear();
+    
     if (!profile || !profile.personal) {
         console.error('No profile data provided for autofill');
         return { success: false, error: 'No profile data provided', filledCount: 0 };
@@ -309,6 +315,12 @@ function autofillForm(profile, isWorkday) {
     // Try to autofill each field
     fields.forEach((field, index) => {
         try {
+            // Skip if this element has already been filled
+            if (filledFields.has(field.element)) {
+                console.log(`Skipping already filled field: ${field.id || field.name || 'unnamed'}`);
+                return;
+            }
+            
             // Update the status overlay
             updateStatusOverlay(overlay, index + 1, fields.length);
             
@@ -325,6 +337,8 @@ function autofillForm(profile, isWorkday) {
                 field.element.classList.add('job-autofill-success');
                 field.element.classList.remove('job-autofill-highlight');
                 filledCount++;
+                // Add to the set of filled fields
+                filledFields.add(field.element);
                 console.log(`Successfully filled field ${field.id || field.name || 'unnamed'} with value: ${value}`);
             } else {
                 field.element.classList.remove('job-autofill-highlight');
@@ -393,6 +407,12 @@ function findMatchingProfileValue(field, profile, isWorkday) {
         console.log('Field already has a value, skipping');
         return null;
     }
+    
+    // Skip if this element has already been filled
+    if (filledFields.has(field.element)) {
+        console.log('Element has already been filled, skipping');
+        return null;
+    }
 
     // Get all identifiers for this field
     const identifiers = [
@@ -406,6 +426,15 @@ function findMatchingProfileValue(field, profile, isWorkday) {
     ].filter(id => id !== '');
 
     console.log('Checking field with identifiers:', identifiers);
+    
+    // Check for phone extension fields - don't autofill these with the phone number
+    if (matchesPattern(identifiers, [
+        'phone ext', 'phone extension', 'phoneext', 'phoneextension', 'phone-ext', 
+        'extension', 'ext', 'phone 2', 'secondary phone'
+    ])) {
+        console.log('Found phone extension field - skipping autofill');
+        return null;
+    }
     
     // Workday-specific address components
     // These are commonly used in Workday application forms
@@ -471,47 +500,54 @@ function findMatchingProfileValue(field, profile, isWorkday) {
         return profile.personal.email;
     }
     
-    // Phone number
+    // Phone number - make sure we don't use for extension fields
     if (matchesPattern(identifiers, [
         'phone', 'telephone', 'phone number', 'phonenumber', 'phone-number', 'mobile', 'cell',
         'contact--phone', 'workphone', 'mobile-phone', 'cell-phone', 'mobile number',
         'primary phone', 'daytime phone', 'evening phone', 'home phone'
-    ])) {
+    ]) && !matchesPattern(identifiers, ['ext', 'extension', 'phone2', 'phone 2', 'secondary'])) {
         console.log(`Found phone match for "${profile.personal.phone}"`);
         return profile.personal.phone;
     }
     
-    // Address - check for address fields but exclude email
+    // Address - check for address fields but exclude email and specifically match address-related patterns
     if (matchesPattern(identifiers, [
         'address', 'street', 'street address', 'address line 1', 'addressline1',
-        'streetaddress', 'address1', 'address--line1', 'location--address', 'mailing address'
-    ]) && !matchesPattern(identifiers, ['email', 'mail'])) {
+        'streetaddress', 'address1', 'address--line1', 'location--address', 'mailing address',
+        'street-address', 'address_line_1', 'addressstreet', 'residentialaddress'
+    ]) && !matchesPattern(identifiers, ['email', 'mail', 'city', 'state', 'zip', 'postal', 'country']) && 
+    !identifiers.some(id => id.includes('city') || id.includes('state') || id.includes('zip') || 
+                           id.includes('postal') || id.includes('country'))) {
         console.log(`Found address match for "${profile.personal.address}"`);
         return profile.personal.address;
     }
     
-    // City
-    if (matchesPattern(identifiers, [
+    // City - ensure it only matches city-specific fields
+    if ((matchesPattern(identifiers, [
         'city', 'town', 'municipality', 'city name', 'cityname', 'address--city'
-    ])) {
+    ]) || identifiers.some(id => id === 'city' || id.endsWith('city') || id.includes('city'))) && 
+    !matchesPattern(identifiers, ['address line', 'addressline', 'street'])) {
         console.log(`Found city match for "${profile.personal.city}"`);
         return profile.personal.city;
     }
     
-    // State/Province
-    if (matchesPattern(identifiers, [
+    // State/Province - ensure it only matches state-specific fields
+    if ((matchesPattern(identifiers, [
         'state', 'province', 'region', 'state/province', 'state name', 'administrative area',
         'address--state', 'address--region'
-    ])) {
+    ]) || identifiers.some(id => id === 'state' || id.endsWith('state') || id.includes('state') || id.includes('region'))) && 
+    !matchesPattern(identifiers, ['address line', 'addressline', 'street'])) {
         console.log(`Found state match for "${profile.personal.state}"`);
         return profile.personal.state;
     }
     
-    // Zip/Postal Code
-    if (matchesPattern(identifiers, [
+    // Zip/Postal Code - ensure it only matches postal code specific fields
+    if ((matchesPattern(identifiers, [
         'zip', 'zipcode', 'zip code', 'zip-code', 'postal', 'postalcode', 'postal code',
         'postal-code', 'address--postalcode', 'address--zipcode'
-    ])) {
+    ]) || identifiers.some(id => id === 'zip' || id.endsWith('zip') || id.includes('zip') || 
+                                 id.includes('postal'))) && 
+    !matchesPattern(identifiers, ['address line', 'addressline', 'street'])) {
         console.log(`Found postal/zip code match for "${profile.personal.zip}"`);
         return profile.personal.zip;
     }
