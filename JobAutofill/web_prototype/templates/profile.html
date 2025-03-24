@@ -71,7 +71,16 @@
                                        placeholder="Enter email address" required>
                             </div>
                         </div>
-                        <div class="form-group col-md-6">
+                        <div class="form-group col-md-3">
+                            <label for="phone_type">Phone Type</label>
+                            <select class="form-control" id="phone_type" name="phone_type" required>
+                                <option value="Mobile" {% if personal_info.phone_type == 'Mobile' %}selected{% endif %}>Mobile</option>
+                                <option value="Telephone" {% if personal_info.phone_type == 'Telephone' %}selected{% endif %}>Telephone</option>
+                                <option value="Fax" {% if personal_info.phone_type == 'Fax' %}selected{% endif %}>Fax</option>
+                                <option value="Pager" {% if personal_info.phone_type == 'Pager' %}selected{% endif %}>Pager</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-3">
                             <label for="phone">Phone Number</label>
                             <div class="input-group">
                                 <div class="input-group-prepend">
@@ -102,9 +111,60 @@
                         </div>
                         <div class="form-group col-md-3">
                             <label for="state">State</label>
-                            <input type="text" class="form-control" id="state" name="state" 
-                                   value="{{ personal_info.state or '' }}"
-                                   placeholder="Enter state">
+                            <select class="form-control" id="state" name="state">
+                                <option value="" {% if not personal_info.state %}selected{% endif %}>Select a state</option>
+                                <option value="Alabama" {% if personal_info.state == 'Alabama' %}selected{% endif %}>Alabama</option>
+                                <option value="Alaska" {% if personal_info.state == 'Alaska' %}selected{% endif %}>Alaska</option>
+                                <option value="Arizona" {% if personal_info.state == 'Arizona' %}selected{% endif %}>Arizona</option>
+                                <option value="Arkansas" {% if personal_info.state == 'Arkansas' %}selected{% endif %}>Arkansas</option>
+                                <option value="California" {% if personal_info.state == 'California' %}selected{% endif %}>California</option>
+                                <option value="Colorado" {% if personal_info.state == 'Colorado' %}selected{% endif %}>Colorado</option>
+                                <option value="Connecticut" {% if personal_info.state == 'Connecticut' %}selected{% endif %}>Connecticut</option>
+                                <option value="Delaware" {% if personal_info.state == 'Delaware' %}selected{% endif %}>Delaware</option>
+                                <option value="Florida" {% if personal_info.state == 'Florida' %}selected{% endif %}>Florida</option>
+                                <option value="Georgia" {% if personal_info.state == 'Georgia' %}selected{% endif %}>Georgia</option>
+                                <option value="Hawaii" {% if personal_info.state == 'Hawaii' %}selected{% endif %}>Hawaii</option>
+                                <option value="Idaho" {% if personal_info.state == 'Idaho' %}selected{% endif %}>Idaho</option>
+                                <option value="Illinois" {% if personal_info.state == 'Illinois' %}selected{% endif %}>Illinois</option>
+                                <option value="Indiana" {% if personal_info.state == 'Indiana' %}selected{% endif %}>Indiana</option>
+                                <option value="Iowa" {% if personal_info.state == 'Iowa' %}selected{% endif %}>Iowa</option>
+                                <option value="Kansas" {% if personal_info.state == 'Kansas' %}selected{% endif %}>Kansas</option>
+                                <option value="Kentucky" {% if personal_info.state == 'Kentucky' %}selected{% endif %}>Kentucky</option>
+                                <option value="Louisiana" {% if personal_info.state == 'Louisiana' %}selected{% endif %}>Louisiana</option>
+                                <option value="Maine" {% if personal_info.state == 'Maine' %}selected{% endif %}>Maine</option>
+                                <option value="Maryland" {% if personal_info.state == 'Maryland' %}selected{% endif %}>Maryland</option>
+                                <option value="Massachusetts" {% if personal_info.state == 'Massachusetts' %}selected{% endif %}>Massachusetts</option>
+                                <option value="Michigan" {% if personal_info.state == 'Michigan' %}selected{% endif %}>Michigan</option>
+                                <option value="Minnesota" {% if personal_info.state == 'Minnesota' %}selected{% endif %}>Minnesota</option>
+                                <option value="Mississippi" {% if personal_info.state == 'Mississippi' %}selected{% endif %}>Mississippi</option>
+                                <option value="Missouri" {% if personal_info.state == 'Missouri' %}selected{% endif %}>Missouri</option>
+                                <option value="Montana" {% if personal_info.state == 'Montana' %}selected{% endif %}>Montana</option>
+                                <option value="Nebraska" {% if personal_info.state == 'Nebraska' %}selected{% endif %}>Nebraska</option>
+                                <option value="Nevada" {% if personal_info.state == 'Nevada' %}selected{% endif %}>Nevada</option>
+                                <option value="New Hampshire" {% if personal_info.state == 'New Hampshire' %}selected{% endif %}>New Hampshire</option>
+                                <option value="New Jersey" {% if personal_info.state == 'New Jersey' %}selected{% endif %}>New Jersey</option>
+                                <option value="New Mexico" {% if personal_info.state == 'New Mexico' %}selected{% endif %}>New Mexico</option>
+                                <option value="New York" {% if personal_info.state == 'New York' %}selected{% endif %}>New York</option>
+                                <option value="North Carolina" {% if personal_info.state == 'North Carolina' %}selected{% endif %}>North Carolina</option>
+                                <option value="North Dakota" {% if personal_info.state == 'North Dakota' %}selected{% endif %}>North Dakota</option>
+                                <option value="Ohio" {% if personal_info.state == 'Ohio' %}selected{% endif %}>Ohio</option>
+                                <option value="Oklahoma" {% if personal_info.state == 'Oklahoma' %}selected{% endif %}>Oklahoma</option>
+                                <option value="Oregon" {% if personal_info.state == 'Oregon' %}selected{% endif %}>Oregon</option>
+                                <option value="Pennsylvania" {% if personal_info.state == 'Pennsylvania' %}selected{% endif %}>Pennsylvania</option>
+                                <option value="Rhode Island" {% if personal_info.state == 'Rhode Island' %}selected{% endif %}>Rhode Island</option>
+                                <option value="South Carolina" {% if personal_info.state == 'South Carolina' %}selected{% endif %}>South Carolina</option>
+                                <option value="South Dakota" {% if personal_info.state == 'South Dakota' %}selected{% endif %}>South Dakota</option>
+                                <option value="Tennessee" {% if personal_info.state == 'Tennessee' %}selected{% endif %}>Tennessee</option>
+                                <option value="Texas" {% if personal_info.state == 'Texas' %}selected{% endif %}>Texas</option>
+                                <option value="Utah" {% if personal_info.state == 'Utah' %}selected{% endif %}>Utah</option>
+                                <option value="Vermont" {% if personal_info.state == 'Vermont' %}selected{% endif %}>Vermont</option>
+                                <option value="Virginia" {% if personal_info.state == 'Virginia' %}selected{% endif %}>Virginia</option>
+                                <option value="Washington" {% if personal_info.state == 'Washington' %}selected{% endif %}>Washington</option>
+                                <option value="West Virginia" {% if personal_info.state == 'West Virginia' %}selected{% endif %}>West Virginia</option>
+                                <option value="Wisconsin" {% if personal_info.state == 'Wisconsin' %}selected{% endif %}>Wisconsin</option>
+                                <option value="Wyoming" {% if personal_info.state == 'Wyoming' %}selected{% endif %}>Wyoming</option>
+                                <option value="District of Columbia" {% if personal_info.state == 'District of Columbia' %}selected{% endif %}>District of Columbia</option>
+                            </select>
                         </div>
                         <div class="form-group col-md-3">
                             <label for="zip">ZIP Code</label>
@@ -141,12 +201,6 @@
                                        placeholder="https://yourwebsite.com">
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="summary">Professional Summary</label>
-                        <textarea class="form-control" id="summary" name="summary" rows="4" 
-                                  placeholder="Brief professional summary or objective statement">{{ personal_info.summary or '' }}</textarea>
                     </div>
                     
                     <button type="submit" class="btn btn-primary">

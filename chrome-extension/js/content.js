@@ -55,13 +55,74 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Keep track of filled fields to prevent duplicate filling
 const filledFields = new Set();
 
+// Add a state name to abbreviation mapping
+const STATE_ABBREVIATIONS = {
+    'alabama': 'AL',
+    'alaska': 'AK',
+    'arizona': 'AZ',
+    'arkansas': 'AR',
+    'california': 'CA',
+    'colorado': 'CO',
+    'connecticut': 'CT',
+    'delaware': 'DE',
+    'district of columbia': 'DC',
+    'florida': 'FL',
+    'georgia': 'GA',
+    'hawaii': 'HI',
+    'idaho': 'ID',
+    'illinois': 'IL',
+    'indiana': 'IN',
+    'iowa': 'IA',
+    'kansas': 'KS',
+    'kentucky': 'KY',
+    'louisiana': 'LA',
+    'maine': 'ME',
+    'maryland': 'MD',
+    'massachusetts': 'MA',
+    'michigan': 'MI',
+    'minnesota': 'MN',
+    'mississippi': 'MS',
+    'missouri': 'MO',
+    'montana': 'MT',
+    'nebraska': 'NE',
+    'nevada': 'NV',
+    'new hampshire': 'NH',
+    'new jersey': 'NJ',
+    'new mexico': 'NM',
+    'new york': 'NY',
+    'north carolina': 'NC',
+    'north dakota': 'ND',
+    'ohio': 'OH',
+    'oklahoma': 'OK',
+    'oregon': 'OR',
+    'pennsylvania': 'PA',
+    'rhode island': 'RI',
+    'south carolina': 'SC',
+    'south dakota': 'SD',
+    'tennessee': 'TN',
+    'texas': 'TX',
+    'utah': 'UT',
+    'vermont': 'VT',
+    'virginia': 'VA',
+    'washington': 'WA',
+    'west virginia': 'WV',
+    'wisconsin': 'WI',
+    'wyoming': 'WY'
+};
+
+// Reverse mapping for abbreviation to state name
+const ABBREVIATION_TO_STATE = Object.entries(STATE_ABBREVIATIONS).reduce((acc, [state, abbr]) => {
+    acc[abbr.toLowerCase()] = state.charAt(0).toUpperCase() + state.slice(1);
+    return acc;
+}, {});
+
 function analyzeFormFields(isWorkday) {
     console.log('Analyzing form fields with Workday mode:', isWorkday);
     const fields = [];
     
     // Find all input elements
     const inputs = document.querySelectorAll('input, select, textarea');
-    console.log(`Found ${inputs.length} total input elements on the page`);
+    console.log(`Found ${inputs.length} total standard input elements on the page`);
     
     // Process each input element
     inputs.forEach((input, index) => {
@@ -84,7 +145,32 @@ function analyzeFormFields(isWorkday) {
         }
     });
     
-    console.log(`Found ${fields.length} relevant fields for potential autofill`);
+    // If Workday mode is enabled, also look for custom Workday dropdowns (button elements)
+    if (isWorkday) {
+        console.log('Looking for Workday custom dropdown elements...');
+        
+        // Find all button elements that could be Workday dropdowns
+        const workdayDropdowns = document.querySelectorAll('button[aria-haspopup="listbox"], [role="combobox"], .css-3fboo9, div[aria-haspopup="listbox"]');
+        console.log(`Found ${workdayDropdowns.length} potential Workday dropdown elements`);
+        
+        workdayDropdowns.forEach((dropdown, index) => {
+            if (!isVisible(dropdown)) return;
+            
+            const fieldInfo = extractFieldInfo(dropdown, isWorkday);
+            if (fieldInfo) {
+                console.log(`Workday Dropdown ${index}: Found custom dropdown:`, fieldInfo);
+                fields.push(fieldInfo);
+                
+                // Add debug outline during analysis
+                dropdown.classList.add('job-autofill-debug');
+                setTimeout(() => {
+                    dropdown.classList.remove('job-autofill-debug');
+                }, 500);
+            }
+        });
+    }
+    
+    console.log(`Found ${fields.length} total relevant fields for potential autofill`);
     return fields;
 }
 
@@ -107,7 +193,7 @@ function extractFieldInfo(element, isWorkday) {
     try {
         const fieldInfo = {
             element: element,
-            type: element.type || 'text',
+            type: element.type || (element.tagName.toLowerCase() === 'button' && element.getAttribute('aria-haspopup') === 'listbox' ? 'dropdown' : 'text'),
             id: element.id || '',
             name: element.name || '',
             className: element.className || '',
@@ -115,13 +201,14 @@ function extractFieldInfo(element, isWorkday) {
             fkitId: element.getAttribute('data-fkit-id') || '',
             ariaLabel: element.getAttribute('aria-label') || '',
             label: findFieldLabel(element) || '',
-            value: element.value || '',
+            value: element.value || element.textContent || '',
             placeholder: element.getAttribute('placeholder') || '',
-            isWorkday: isWorkday
+            isWorkday: isWorkday,
+            isCustomDropdown: element.tagName.toLowerCase() === 'button' && element.getAttribute('aria-haspopup') === 'listbox'
         };
         
         // Debug log for field detection
-        console.log(`Field detected: type=${fieldInfo.type}, id=${fieldInfo.id}, name=${fieldInfo.name}, label=${fieldInfo.label}`);
+        console.log(`Field detected: type=${fieldInfo.type}, id=${fieldInfo.id}, name=${fieldInfo.name}, label=${fieldInfo.label}, isCustomDropdown=${fieldInfo.isCustomDropdown}`);
         
         // For Workday forms, look for specific patterns
         if (isWorkday) {
@@ -333,7 +420,21 @@ function autofillForm(profile, isWorkday) {
             
             // If a value was found, fill the field
             if (value !== null && value !== undefined) {
-                fillField(field.element, value);
+                // Special handling for Workday dropdowns if needed
+                let filled = false;
+                
+                // Check if this is a Workday dropdown field that needs special handling
+                if (isWorkday && field.element.tagName.toLowerCase() === 'select' || 
+                    (field.automationId && field.automationId.includes('phonetype'))) {
+                    // For Workday dropdown fields, try the special handling first
+                    filled = findAndHandleWorkdayDropdown(field, value);
+                }
+                
+                // If special handling didn't work or wasn't applicable, use standard field filling
+                if (!filled) {
+                    fillField(field.element, value);
+                }
+                
                 field.element.classList.add('job-autofill-success');
                 field.element.classList.remove('job-autofill-highlight');
                 filledCount++;
@@ -403,8 +504,10 @@ function updateStatusOverlay(overlay, current, total) {
 
 function findMatchingProfileValue(field, profile, isWorkday) {
     // Skip fields that already have values unless they're empty strings
-    if (field.element.value && field.element.value.trim() !== '') {
-        console.log('Field already has a value, skipping');
+    // For custom dropdowns, check the text content instead of value
+    const fieldValue = field.isCustomDropdown ? field.element.textContent.trim() : field.element.value;
+    if (fieldValue && fieldValue.trim() !== '' && !fieldValue.toLowerCase().includes('select')) {
+        console.log('Field already has a value, skipping:', fieldValue);
         return null;
     }
     
@@ -426,6 +529,28 @@ function findMatchingProfileValue(field, profile, isWorkday) {
     ].filter(id => id !== '');
 
     console.log('Checking field with identifiers:', identifiers);
+    
+    // Specific check for the phoneNumber--phoneType button in Workday
+    if (field.id.includes('phoneNumber--phoneType') || 
+        field.id.includes('phoneType') || 
+        (field.ariaLabel && field.ariaLabel.toLowerCase().includes('phone') && 
+         field.ariaLabel.toLowerCase().includes('type'))) {
+        const phoneType = profile.personal.phoneType || 'Mobile';
+        console.log(`Found exact phone type field match in Workday for "${phoneType}"`);
+        return phoneType;
+    }
+    
+    // More comprehensive check for phone device type fields
+    if ((matchesPattern(identifiers, [
+        'phonetype', 'phone type', 'phone-type', 'phone_type', 'phonedevicetype', 
+        'device type', 'phone--type', 'phonenumber--phonetype'
+    ]) || identifiers.some(id => 
+        id.includes('phone') && (id.includes('type') || id.includes('device'))
+    )) && !matchesPattern(identifiers, ['extension', 'ext'])) {
+        const phoneType = profile.personal.phoneType || 'Mobile';
+        console.log(`Found phone device type match for "${phoneType}"`);
+        return phoneType;
+    }
     
     // Check for phone extension fields - don't autofill these with the phone number
     if (matchesPattern(identifiers, [
@@ -654,6 +779,30 @@ function findMatchingProfileValue(field, profile, isWorkday) {
         }
     }
     
+    // Specific check for state fields in Workday
+    if (field.id.includes('address--state') || 
+        field.id.includes('state') ||
+        field.name.includes('state') ||
+        (field.ariaLabel && field.ariaLabel.toLowerCase().includes('state'))) {
+        
+        const state = profile.personal.state || '';
+        console.log(`Found state field match for "${state}"`);
+        
+        // Return abbreviation if field has a class or attribute suggesting it wants abbreviations
+        if (field.element.classList.contains('state-abbr') || 
+            field.element.getAttribute('data-format') === 'abbr' ||
+            field.element.getAttribute('maxlength') === '2') {
+            
+            const stateAbbr = STATE_ABBREVIATIONS[state.toLowerCase()];
+            if (stateAbbr) {
+                console.log(`Converting state "${state}" to abbreviation "${stateAbbr}"`);
+                return stateAbbr;
+            }
+        }
+        
+        return state;
+    }
+    
     // No match found
     console.log('No matching profile value found for this field');
     return null;
@@ -713,6 +862,8 @@ function fillField(element, value) {
             fillSelectField(element, value);
         } else if (element.tagName.toLowerCase() === 'textarea') {
             fillTextareaField(element, value);
+        } else if (element.tagName.toLowerCase() === 'button' && element.getAttribute('aria-haspopup') === 'listbox') {
+            fillWorkdayCustomDropdown(element, value);
         } else {
             fillInputField(element, value);
         }
@@ -737,25 +888,129 @@ function fillField(element, value) {
 }
 
 function fillSelectField(element, value) {
-    console.log('Filling SELECT field');
+    console.log('Filling SELECT field with value:', value);
     
     // Try to find matching option
     let matched = false;
     const lowercaseValue = value.toLowerCase();
     
-    for (let i = 0; i < element.options.length; i++) {
-        const option = element.options[i];
-        const optionText = option.text.toLowerCase();
-        const optionValue = option.value.toLowerCase();
+    // Special handling for phone type fields to ensure proper matching
+    const isPhoneTypeField = element.id.toLowerCase().includes('phonetype') || 
+                             element.id.toLowerCase().includes('phone-type') || 
+                             element.name.toLowerCase().includes('phonetype') || 
+                             element.name.toLowerCase().includes('phone-type') || 
+                             element.getAttribute('data-automation-id')?.toLowerCase().includes('phonetype') ||
+                             element.getAttribute('data-automation-id')?.toLowerCase().includes('phone-type') ||
+                             element.getAttribute('aria-label')?.toLowerCase().includes('phone type');
+    
+    if (isPhoneTypeField) {
+        console.log('This is a phone type field. Looking for specific match:', value);
         
-        if (optionText.includes(lowercaseValue) || 
-            optionValue.includes(lowercaseValue) ||
-            lowercaseValue.includes(optionText) ||
-            lowercaseValue.includes(optionValue)) {
-            console.log(`Found matching option: "${option.text}" (${option.value})`);
-            element.selectedIndex = i;
-            matched = true;
-            break;
+        // Map our phone types to common Workday phone type values
+        const phoneTypeMap = {
+            'mobile': ['cell', 'mobile', 'cellphone', 'mobile phone', 'cell phone'],
+            'telephone': ['home', 'telephone', 'landline', 'home phone'],
+            'work': ['work', 'business', 'company', 'office', 'work phone'],
+            'fax': ['fax', 'facsimile'],
+            'pager': ['pager']
+        };
+        
+        // Get the appropriate match list based on our phone type
+        const matchOptions = phoneTypeMap[lowercaseValue] || [lowercaseValue];
+        console.log('Looking for phone type matches:', matchOptions);
+        
+        // First, ensure that the dropdown is actually clicked/opened
+        // This is important for Workday forms where dropdowns may need to be clicked first
+        simulateClick(element);
+        
+        // Some Workday forms have a specific dropdown structure (may be a custom control)
+        // Check if this is a Workday-style dropdown (div with select-like behavior)
+        const isWorkdayCustomDropdown = element.tagName.toLowerCase() !== 'select' && 
+                                       (element.classList.contains('css-1ku28cn') || 
+                                        element.getAttribute('role') === 'combobox');
+        
+        if (isWorkdayCustomDropdown) {
+            console.log('This appears to be a custom Workday dropdown');
+            
+            // For Workday custom dropdowns, we need to:
+            // 1. Click on the dropdown to open it
+            simulateClick(element);
+            
+            // 2. Wait for the dropdown options to appear
+            setTimeout(() => {
+                // Look for dropdown items in the DOM (Workday patterns)
+                const dropdownItems = document.querySelectorAll('.css-1mkjh7o, .dropdown-option, [role="option"], .dropdown-list-item');
+                console.log(`Found ${dropdownItems.length} dropdown items`);
+                
+                // Try to find the matching option
+                for (const item of dropdownItems) {
+                    const itemText = item.textContent.toLowerCase();
+                    
+                    for (const matchOption of matchOptions) {
+                        if (itemText.includes(matchOption)) {
+                            console.log(`Found matching custom dropdown item: "${item.textContent}"`);
+                            simulateClick(item);
+                            matched = true;
+                            break;
+                        }
+                    }
+                    
+                    if (matched) break;
+                }
+                
+                // If no match found, log available options
+                if (!matched && dropdownItems.length > 0) {
+                    console.log('No match found in custom dropdown. Available options:');
+                    dropdownItems.forEach((item, i) => {
+                        console.log(`- Option ${i}: ${item.textContent}`);
+                    });
+                }
+            }, 500); // Add a small delay to allow the dropdown to open
+            
+        } else if (element.tagName.toLowerCase() === 'select') {
+            // Standard select dropdown
+            // Look for matches in dropdown options
+            for (let i = 0; i < element.options.length; i++) {
+                const option = element.options[i];
+                const optionText = option.text.toLowerCase();
+                const optionValue = option.value.toLowerCase();
+                
+                for (const matchOption of matchOptions) {
+                    if (optionText.includes(matchOption) || optionValue.includes(matchOption)) {
+                        console.log(`Found matching phone type option: "${option.text}" (${option.value})`);
+                        element.selectedIndex = i;
+                        matched = true;
+                        break;
+                    }
+                }
+                
+                if (matched) break;
+            }
+            
+            // If still no match found, just log all available options for debugging
+            if (!matched) {
+                console.log('No phone type match found. Available options:');
+                for (let i = 0; i < element.options.length; i++) {
+                    console.log(`- Option ${i}: ${element.options[i].text} (${element.options[i].value})`);
+                }
+            }
+        }
+    } else {
+        // Regular option matching for non-phone type fields
+        for (let i = 0; i < element.options.length; i++) {
+            const option = element.options[i];
+            const optionText = option.text.toLowerCase();
+            const optionValue = option.value.toLowerCase();
+            
+            if (optionText.includes(lowercaseValue) || 
+                optionValue.includes(lowercaseValue) ||
+                lowercaseValue.includes(optionText) ||
+                lowercaseValue.includes(optionValue)) {
+                console.log(`Found matching option: "${option.text}" (${option.value})`);
+                element.selectedIndex = i;
+                matched = true;
+                break;
+            }
         }
     }
     
@@ -819,4 +1074,286 @@ function triggerEvents(element, eventTypes) {
             }
         }
     });
+}
+
+// Helper function to safely simulate a click on an element
+function simulateClick(element) {
+    if (!element) return;
+    
+    console.log('Simulating click on element:', element);
+    
+    try {
+        // Try the modern way first
+        element.click();
+    } catch (e) {
+        console.error('Error with element.click():', e);
+        
+        try {
+            // Fallback to creating a MouseEvent
+            const event = new MouseEvent('click', {
+                view: window,
+                bubbles: true,
+                cancelable: true
+            });
+            element.dispatchEvent(event);
+        } catch (e2) {
+            console.error('Error dispatching MouseEvent:', e2);
+            
+            // Last resort - try older event creation method
+            try {
+                const event = document.createEvent('MouseEvents');
+                event.initEvent('click', true, true);
+                element.dispatchEvent(event);
+            } catch (e3) {
+                console.error('All click simulation methods failed:', e3);
+            }
+        }
+    }
+}
+
+// Add a function to handle Workday-specific dropdown interactions
+function findAndHandleWorkdayDropdown(field, value) {
+    // Look for Workday dropdown containers
+    const container = field.container || findWorkdayContainer(field.element);
+    if (!container) return false;
+    
+    // Look for possible dropdown triggers
+    const triggers = container.querySelectorAll('.css-1ku28cn, [role="combobox"], .dropdown-trigger, .select-input');
+    if (triggers.length === 0) return false;
+    
+    console.log(`Found ${triggers.length} possible Workday dropdown triggers`);
+    
+    // Click the trigger to open the dropdown
+    simulateClick(triggers[0]);
+    
+    // Wait for dropdown to open and select the matching option
+    setTimeout(() => {
+        // Look for dropdown options
+        const options = document.querySelectorAll('.css-1mkjh7o, .dropdown-option, [role="option"], .dropdown-list-item');
+        console.log(`Found ${options.length} dropdown options after clicking trigger`);
+        
+        const lowercaseValue = value.toLowerCase();
+        let matched = false;
+        
+        // Try to find a matching option
+        for (const option of options) {
+            if (option.textContent.toLowerCase().includes(lowercaseValue)) {
+                console.log(`Found matching option: "${option.textContent}"`);
+                simulateClick(option);
+                matched = true;
+                break;
+            }
+        }
+        
+        if (!matched && options.length > 0) {
+            console.log('No match found. Available options:');
+            options.forEach((opt, i) => console.log(`- Option ${i}: ${opt.textContent}`));
+        }
+    }, 500);
+    
+    return true;
+}
+
+// New function to handle Workday custom dropdown buttons
+function fillWorkdayCustomDropdown(element, value) {
+    console.log('Filling Workday custom dropdown button with value:', value);
+    
+    // First, click the dropdown button to open it
+    simulateClick(element);
+    console.log('Clicked dropdown button, waiting for options to appear...');
+    
+    // Special handling for state selections
+    const isStateField = element.id.includes('state') || 
+                         element.getAttribute('aria-label')?.toLowerCase().includes('state') ||
+                         element.name?.includes('state');
+                         
+    const stateName = value;
+    const stateAbbr = STATE_ABBREVIATIONS[value.toLowerCase()];
+    
+    // Wait for the dropdown options to appear
+    setTimeout(() => {
+        // Try to find the dropdown options container
+        // In Workday, it's often a listbox or popup div that appears after clicking
+        const optionsContainers = document.querySelectorAll('[role="listbox"], .css-dropdown-options, .popup-dropdown');
+        
+        // If no containers found, try finding individual option elements that might be available
+        if (optionsContainers.length === 0) {
+            console.log('No option containers found, looking for individual options...');
+            const options = document.querySelectorAll('[role="option"], .dropdown-option, .css-option');
+            
+            if (options.length > 0) {
+                if (isStateField) {
+                    findAndClickMatchingStateOption(options, stateName, stateAbbr);
+                } else {
+                    findAndClickMatchingOption(options, value);
+                }
+            } else {
+                console.log('No dropdown options found after clicking. Trying to find options by common Workday classes...');
+                
+                // Try alternative selectors for Workday dropdown options
+                const alternativeOptions = document.querySelectorAll('.css-1mkjh7o, .css-1ka88v, .css-bxur4l');
+                if (alternativeOptions.length > 0) {
+                    if (isStateField) {
+                        findAndClickMatchingStateOption(alternativeOptions, stateName, stateAbbr);
+                    } else {
+                        findAndClickMatchingOption(alternativeOptions, value);
+                    }
+                } else {
+                    console.error('Could not find any dropdown options');
+                }
+            }
+        } else {
+            console.log(`Found ${optionsContainers.length} option containers`);
+            
+            // For each container, try to find the matching option
+            optionsContainers.forEach(container => {
+                const options = container.querySelectorAll('[role="option"], li, div');
+                if (options.length > 0) {
+                    if (isStateField) {
+                        findAndClickMatchingStateOption(options, stateName, stateAbbr);
+                    } else {
+                        findAndClickMatchingOption(options, value);
+                    }
+                }
+            });
+        }
+    }, 500);
+}
+
+// Helper function to find and click the matching state option
+function findAndClickMatchingStateOption(options, stateName, stateAbbr) {
+    console.log(`Looking for state match: full name="${stateName}", abbreviation="${stateAbbr}"`);
+    const stateNameLower = stateName.toLowerCase();
+    let foundMatch = false;
+    
+    // Log all available options for debugging
+    console.log('Available state options:');
+    options.forEach((option, index) => {
+        console.log(`Option ${index}: ${option.textContent}`);
+    });
+    
+    // First try: exact match on state name
+    for (const option of options) {
+        const optionText = option.textContent.toLowerCase();
+        
+        if (optionText === stateNameLower) {
+            console.log(`Found exact state name match: "${option.textContent}"`);
+            simulateClick(option);
+            foundMatch = true;
+            break;
+        }
+    }
+    
+    // Second try: match on state abbreviation
+    if (!foundMatch && stateAbbr) {
+        for (const option of options) {
+            const optionText = option.textContent.toLowerCase();
+            
+            if (optionText === stateAbbr.toLowerCase()) {
+                console.log(`Found state abbreviation match: "${option.textContent}"`);
+                simulateClick(option);
+                foundMatch = true;
+                break;
+            }
+        }
+    }
+    
+    // Third try: partial matches
+    if (!foundMatch) {
+        for (const option of options) {
+            const optionText = option.textContent.toLowerCase();
+            
+            // Check if option contains state name
+            if (optionText.includes(stateNameLower)) {
+                console.log(`Found partial state name match: "${option.textContent}"`);
+                simulateClick(option);
+                foundMatch = true;
+                break;
+            }
+            
+            // Check for combined formats like "NY - New York"
+            if (stateAbbr && (
+                optionText.includes(stateAbbr.toLowerCase()) || 
+                optionText.includes(`${stateAbbr.toLowerCase()} -`) || 
+                optionText.includes(`- ${stateNameLower}`)
+            )) {
+                console.log(`Found combined state format match: "${option.textContent}"`);
+                simulateClick(option);
+                foundMatch = true;
+                break;
+            }
+            
+            // Check for abbreviation matches in options that look like abbreviations (2 chars)
+            if (stateAbbr && optionText.length === 2 && optionText === stateAbbr.toLowerCase()) {
+                console.log(`Found abbreviated state match: "${option.textContent}"`);
+                simulateClick(option);
+                foundMatch = true;
+                break;
+            }
+        }
+    }
+    
+    // Fourth try: check for options that have both abbreviation and name
+    if (!foundMatch) {
+        // Look for entries that might contain both the abbreviation and state name
+        for (const option of options) {
+            const optionText = option.textContent.toLowerCase();
+            
+            // Common format: "AL - Alabama" or "Alabama (AL)"
+            if (stateAbbr && (
+                optionText.includes(`${stateAbbr.toLowerCase()} - ${stateNameLower}`) ||
+                optionText.includes(`${stateNameLower} (${stateAbbr.toLowerCase()})`)
+            )) {
+                console.log(`Found state with format match: "${option.textContent}"`);
+                simulateClick(option);
+                foundMatch = true;
+                break;
+            }
+        }
+    }
+    
+    // If still no match, try to find any close matches
+    if (!foundMatch && options.length > 0) {
+        console.log('No exact state match found, looking for close matches...');
+        
+        // Try to find something reasonably close
+        let bestMatch = null;
+        let bestScore = 0;
+        
+        for (const option of options) {
+            const optionText = option.textContent.toLowerCase();
+            
+            // Calculate a rough similarity score
+            let score = 0;
+            
+            // Exact matches get high scores
+            if (optionText === stateNameLower) score += 100;
+            if (stateAbbr && optionText === stateAbbr.toLowerCase()) score += 100;
+            
+            // Partial matches get lower scores
+            if (optionText.includes(stateNameLower)) score += 50;
+            if (stateAbbr && optionText.includes(stateAbbr.toLowerCase())) score += 40;
+            
+            // Combined formats get medium scores
+            if (stateAbbr && optionText.includes(`${stateAbbr.toLowerCase()} -`)) score += 70;
+            if (stateAbbr && optionText.includes(`(${stateAbbr.toLowerCase()})`)) score += 70;
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestMatch = option;
+            }
+        }
+        
+        if (bestMatch && bestScore > 30) {
+            console.log(`Selecting best state match: "${bestMatch.textContent}" with score ${bestScore}`);
+            simulateClick(bestMatch);
+            foundMatch = true;
+        }
+    }
+    
+    // Last resort - if still no match and not a "Select" placeholder, pick the first option
+    if (!foundMatch && options.length > 0 && !options[0].textContent.toLowerCase().includes('select')) {
+        console.log('No state match found, clicking first option as fallback');
+        simulateClick(options[0]);
+    }
 } 
