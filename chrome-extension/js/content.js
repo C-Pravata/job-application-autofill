@@ -598,6 +598,17 @@ function findMatchingProfileValue(field, profile, isWorkday) {
         return profile.personal.firstName;
     }
     
+    // Middle name - medium priority match
+    if (matchesPattern(identifiers, [
+        'middle name', 'middlename', 'middle-name', 'middle initial', 'mi', 'mname', 
+        'legalname--middlename', 'name--middle', 'middle_name', 'middleinitial'
+    ])) {
+        // Return middle name if available, otherwise empty string
+        const middleName = profile.personal.middleName || '';
+        console.log(`Found middle name match, returning: "${middleName}"`);
+        return middleName;
+    }
+    
     // Last name - high priority match
     if (matchesPattern(identifiers, [
         'last name', 'lastname', 'last-name', 'family name', 'family-name', 'lname', 'surname',
@@ -605,6 +616,17 @@ function findMatchingProfileValue(field, profile, isWorkday) {
     ])) {
         console.log(`Found last name match for "${profile.personal.lastName}"`);
         return profile.personal.lastName;
+    }
+    
+    // Suffix fields - check for Mr, Mrs, Jr, Sr, etc.
+    if (matchesPattern(identifiers, [
+        'suffix', 'name suffix', 'name--suffix', 'legalname--suffix', 'title suffix', 
+        'name title', 'honorific', 'generation', 'generational suffix'
+    ])) {
+        // If we have a suffix in profile, use it, otherwise leave empty
+        const suffix = profile.personal.suffix || '';
+        console.log(`Found suffix field, returning: "${suffix}"`);
+        return suffix;
     }
     
     // Full name - check for whole name fields
@@ -825,8 +847,21 @@ function matchesPattern(identifiers, patterns) {
         
         // Check for partial matches (field identifier contains pattern)
         for (const pattern of patterns) {
-            if (id.includes(pattern)) {
-                console.log(`Partial match found: pattern "${pattern}" in identifier "${id}"`);
+            // More strict partial matching to avoid false positives
+            // Check if there are word boundaries around the pattern or it's part of a compound word
+            if (id.includes(pattern) && (
+                // Pattern at beginning of identifier
+                id.startsWith(pattern) ||
+                // Pattern at end of identifier
+                id.endsWith(pattern) ||
+                // Pattern with word boundary before it (spaces, hyphens, underscores)
+                id.match(new RegExp(`[\\s\\-_]${pattern}`)) ||
+                // Pattern with word boundary after it
+                id.match(new RegExp(`${pattern}[\\s\\-_]`)) ||
+                // Pattern with beginning and end boundaries (only for longer patterns)
+                (pattern.length > 5 && new RegExp(`\\b${pattern}\\b`).test(id))
+            )) {
+                console.log(`Partial match found: pattern "${pattern}" in identifier "${id}" with word boundaries`);
                 return true;
             }
         }
@@ -1354,6 +1389,51 @@ function findAndClickMatchingStateOption(options, stateName, stateAbbr) {
     // Last resort - if still no match and not a "Select" placeholder, pick the first option
     if (!foundMatch && options.length > 0 && !options[0].textContent.toLowerCase().includes('select')) {
         console.log('No state match found, clicking first option as fallback');
+        simulateClick(options[0]);
+    }
+}
+
+// Helper function to find and click matching options in dropdowns
+function findAndClickMatchingOption(options, value) {
+    console.log(`Looking for option matching value: "${value}"`);
+    const valueLower = value.toLowerCase();
+    let foundMatch = false;
+    
+    // Log all available options for debugging
+    console.log('Available options:');
+    options.forEach((option, index) => {
+        console.log(`Option ${index}: ${option.textContent}`);
+    });
+    
+    // First try: exact match
+    for (const option of options) {
+        const optionText = option.textContent.toLowerCase();
+        
+        if (optionText === valueLower) {
+            console.log(`Found exact match: "${option.textContent}"`);
+            simulateClick(option);
+            foundMatch = true;
+            break;
+        }
+    }
+    
+    // Second try: contains match
+    if (!foundMatch) {
+        for (const option of options) {
+            const optionText = option.textContent.toLowerCase();
+            
+            if (optionText.includes(valueLower) || valueLower.includes(optionText)) {
+                console.log(`Found partial match: "${option.textContent}"`);
+                simulateClick(option);
+                foundMatch = true;
+                break;
+            }
+        }
+    }
+    
+    // Last resort - if still no match and not a "Select" placeholder, pick the first option
+    if (!foundMatch && options.length > 0 && !options[0].textContent.toLowerCase().includes('select')) {
+        console.log('No match found, clicking first option as fallback');
         simulateClick(options[0]);
     }
 } 
