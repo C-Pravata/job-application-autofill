@@ -2,6 +2,7 @@
 const API_BASE_URL = 'http://localhost:8080'; // Base URL for the Flask app
 const API_PROFILE_ENDPOINT = '/api/profile-public'; // Use the public endpoint
 let profileData = null;
+let useWebsiteFormsOnly = true; // NEW FLAG - Always use website form data by default
 
 // DOM Elements - with correct references
 const profileStatus = document.getElementById('profile-status');
@@ -203,13 +204,30 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('Initializing UI and fetching profile data');
     
     try {
-      // Try to fetch profile data from Flask app
-      console.log('Fetching profile data from API...');
+      // Check for existing form data first
+      chrome.storage.local.get(['analyzedFormData'], function(result) {
+        if (result.analyzedFormData && Object.keys(result.analyzedFormData).length > 0) {
+          console.log('Found existing form data:', result.analyzedFormData);
+          
+          if (status) {
+            status.textContent = 'Using data from your website forms. Ready to analyze form fields.';
+            status.className = 'status info';
+          }
+          
+          if (connectionStatus) {
+            connectionStatus.textContent = 'Using website form data';
+            connectionStatus.className = 'status-indicator connected';
+          }
+        }
+      });
+      
+      // Try to fetch profile data from Flask app only as fallback
+      console.log('Fetching profile data from API as fallback...');
       const response = await fetch(`${API_BASE_URL}${API_PROFILE_ENDPOINT}`);
       
       if (response.ok) {
         const data = await response.json();
-        console.log('Received profile data from API:', data);
+        console.log('Received profile data from API (for fallback use only):', data);
         
         appProfileData = {
           personal: {
@@ -252,20 +270,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         if (connectionStatus) {
-          connectionStatus.textContent = 'Connected to web app';
+          connectionStatus.textContent = 'Using website form data (API available as fallback)';
           connectionStatus.className = 'status-indicator connected';
         }
         
         // Store the app profile data
         chrome.storage.local.set({ 'appProfileData': appProfileData });
-        console.log('Stored app profile data in local storage');
+        console.log('Stored app profile data in local storage (for fallback use only)');
         console.log('Personal data includes:', appProfileData.personal);
         
         // Set the profile data
         profileData = appProfileData;
         
         if (status) {
-          status.textContent = 'Profile loaded. Ready to analyze form fields';
+          status.textContent = 'Ready to analyze form fields. Using your website forms data.';
           status.className = 'status info';
         }
       } else {
@@ -274,15 +292,31 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (error) {
       console.log('Error fetching profile data:', error);
       
-      if (connectionStatus) {
-        connectionStatus.textContent = 'Could not connect to web app';
-        connectionStatus.className = 'status-indicator disconnected';
-      }
-      
-      if (status) {
-        status.textContent = 'Error: Could not connect to web app. Please ensure the web app is running.';
-        status.className = 'status error';
-      }
+      chrome.storage.local.get(['analyzedFormData'], function(result) {
+        if (result.analyzedFormData && Object.keys(result.analyzedFormData).length > 0) {
+          // We have form data, so we're good
+          if (connectionStatus) {
+            connectionStatus.textContent = 'Using website form data only';
+            connectionStatus.className = 'status-indicator connected';
+          }
+          
+          if (status) {
+            status.textContent = 'Ready to analyze form fields. Using your website forms data.';
+            status.className = 'status info';
+          }
+        } else {
+          // No form data and no API connection
+          if (connectionStatus) {
+            connectionStatus.textContent = 'Using website form data only (no API)';
+            connectionStatus.className = 'status-indicator disconnected';
+          }
+          
+          if (status) {
+            status.textContent = 'Ready to analyze website forms. No previous form data found.';
+            status.className = 'status warning';
+          }
+        }
+      });
     }
   }
   
@@ -363,31 +397,87 @@ document.addEventListener('DOMContentLoaded', function() {
     status.textContent = 'Filling form fields...';
     status.className = 'status info';
     
-    // If profile data is not available, try to refresh it from the API
-    if (!profileData || !profileData.personal) {
-      status.textContent = 'No profile data available. Refreshing...';
-      status.className = 'status warning';
+    // Always use form data first - check if we have analyzed form data
+    chrome.storage.local.get(['analyzedFormData'], function(result) {
+      if (result.analyzedFormData) {
+        console.log('Using form values from analyzed form:', result.analyzedFormData);
+        // Continue with autofill using data from the form itself
+        performAutofill(true);
+        return;
+      }
       
-      // Try to reload profile data
-      fetch(`${API_BASE_URL}${API_PROFILE_ENDPOINT}`)
-        .then(response => {
-          if (response.ok) return response.json();
-          throw new Error('Failed to fetch profile data');
-        })
-        .then(data => {
-          // Process the data and continue with autofill
-          processProfileDataAndAutofill(data);
-        })
-        .catch(error => {
-          console.error('Error refreshing profile data:', error);
-          status.textContent = 'Error: Could not load profile data. Make sure the web app is running.';
-          status.className = 'status error';
-        });
-      return;
-    }
-    
-    // If we have profile data, proceed with autofill
-    performAutofill();
+      // If we don't have form data, proceed with normal profile data
+      // This is a fallback scenario
+      if (!profileData || !profileData.personal) {
+        status.textContent = 'No form data available. Analyzing form first...';
+        status.className = 'status warning';
+        
+        // Try to analyze the form first
+        handleAnalyzeForm();
+        
+        // Then try again with autofill after a short delay
+        setTimeout(() => {
+          chrome.storage.local.get(['analyzedFormData'], function(result) {
+            if (result.analyzedFormData) {
+              console.log('Now using newly analyzed form data');
+              performAutofill(true);
+            } else {
+              // Last resort - use any profile data we might have
+              console.log('No form data found even after analysis, using profile data as last resort');
+              
+              // Try to reload profile data
+              fetch(`${API_BASE_URL}${API_PROFILE_ENDPOINT}`)
+                .then(response => {
+                  if (response.ok) return response.json();
+                  throw new Error('Failed to fetch profile data');
+                })
+                .then(data => {
+                  // Process the data and continue with autofill
+                  processProfileDataAndAutofill(data);
+                })
+                .catch(error => {
+                  console.error('Error refreshing profile data:', error);
+                  // Use demo profile as last resort
+                  console.log('Using DEMO_PROFILE as absolute last resort');
+                  profileData = DEMO_PROFILE;
+                  status.textContent = 'No form data found. Using demo data as last resort.';
+                  status.className = 'status warning';
+                  performAutofill(false);
+                });
+            }
+          });
+        }, 2000);
+        return;
+      }
+      
+      // If we have profile data but no form data, proceed with autofill
+      // This is still a fallback scenario
+      performAutofill(false);
+    });
+  }
+  
+  // Helper function to try loading profile data as a fallback
+  function tryLoadProfileData(callback) {
+    // Try to reload profile data
+    fetch(`${API_BASE_URL}${API_PROFILE_ENDPOINT}`)
+      .then(response => {
+        if (response.ok) return response.json();
+        throw new Error('Failed to fetch profile data');
+      })
+      .then(data => {
+        // Process the data and continue with autofill
+        processProfileDataAndAutofill(data);
+        if (callback) callback();
+      })
+      .catch(error => {
+        console.error('Error refreshing profile data:', error);
+        // Use demo profile as a fallback when API fails
+        console.log('Using DEMO_PROFILE as fallback since API failed');
+        profileData = DEMO_PROFILE;
+        status.textContent = 'Using form values with demo profile as fallback.';
+        status.className = 'status warning';
+        if (callback) callback();
+      });
   }
   
   // Helper function to process profile data and then autofill
@@ -438,12 +528,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set the profile data
     profileData = appProfileData;
     
-    // Now perform the autofill
-    performAutofill();
+    // Proceed with autofill - always use form values first
+    performAutofill(true);
   }
   
-  function performAutofill() {
+  function performAutofill(useFormValues = true) {
     console.log('Using profile data for autofill:', profileData);
+    console.log('Using form values flag:', useFormValues);
     
     chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
       if (!tabs || tabs.length === 0) {
@@ -459,13 +550,15 @@ document.addEventListener('DOMContentLoaded', function() {
       console.log('Sending AUTOFILL_FORM message to tab:', currentTab.id);
       console.log('With profile data:', profileData);
       console.log('Workday mode enabled:', isWorkday);
+      console.log('Using form values flag:', useFormValues);
       
       chrome.tabs.sendMessage(
         currentTab.id,
         { 
           action: 'AUTOFILL_FORM',
           profile: profileData,
-          isWorkday: isWorkday
+          isWorkday: isWorkday,
+          useFormValues: useFormValues
         },
         function(response) {
           console.log('Got autofill response:', response);
@@ -486,10 +579,10 @@ document.addEventListener('DOMContentLoaded', function() {
           
           if (response.success) {
             if (response.filledCount > 0) {
-              status.textContent = `Successfully filled ${response.filledCount} fields`;
+              status.textContent = `Successfully filled ${response.filledCount} fields using website form data`;
               status.className = 'status success';
             } else {
-              status.textContent = 'No fields were filled. Form fields might not match your profile data.';
+              status.textContent = 'No fields were filled. Try analyzing the form first.';
               status.className = 'status warning';
             }
           } else {

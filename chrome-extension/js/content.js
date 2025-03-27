@@ -32,6 +32,48 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             console.log('Analyzing form with Workday mode:', request.isWorkday);
             const fields = analyzeFormFields(request.isWorkday);
             console.log('Analyzed fields:', fields);
+            
+            // Store form field values for future use - ENHANCED to capture more data
+            const formData = {};
+            fields.forEach(field => {
+                // Extract form values to use them instead of profile data
+                const fieldId = field.id || field.name || field.automationId || field.label;
+                let fieldValue = null;
+                
+                // Get value based on field type
+                if (field.isCustomDropdown) {
+                    fieldValue = field.element.textContent.trim();
+                } else if (field.element.tagName.toLowerCase() === 'select') {
+                    const selectedOption = field.element.options[field.element.selectedIndex];
+                    fieldValue = selectedOption ? selectedOption.text : field.element.value;
+                } else {
+                    fieldValue = field.element.value;
+                }
+                
+                // Only store non-empty values that aren't placeholder text
+                if (fieldId && fieldValue && 
+                    fieldValue.trim() !== '' && 
+                    !fieldValue.toLowerCase().includes('select') &&
+                    !fieldValue.toLowerCase().includes('choose')) {
+                    
+                    formData[fieldId] = fieldValue;
+                    console.log(`Captured form value: ${fieldId} = ${fieldValue}`);
+                    
+                    // Also store by field label for better matching
+                    if (field.label && field.label.trim() !== '') {
+                        formData[field.label.toLowerCase()] = fieldValue;
+                    }
+                }
+            });
+            
+            // Store the form data in Chrome storage
+            if (Object.keys(formData).length > 0) {
+                console.log('Storing form field values:', formData);
+                chrome.storage.local.set({ 'analyzedFormData': formData });
+            } else {
+                console.log('No form values found to store');
+            }
+            
             sendResponse({ fields: fields });
         } catch (error) {
             console.error('Error analyzing form:', error);
@@ -41,7 +83,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         try {
             console.log('Autofilling form with profile:', request.profile);
             console.log('Workday mode:', request.isWorkday);
-            const result = autofillForm(request.profile, request.isWorkday);
+            console.log('Use form values flag:', request.useFormValues);
+            const result = autofillForm(request.profile, request.isWorkday, request.useFormValues);
             console.log('Autofill result:', result);
             sendResponse(result);
         } catch (error) {
@@ -124,6 +167,9 @@ function analyzeFormFields(isWorkday) {
     const inputs = document.querySelectorAll('input, select, textarea');
     console.log(`Found ${inputs.length} total standard input elements on the page`);
     
+    // Collect all form values for future use
+    const formData = {};
+    
     // Process each input element
     inputs.forEach((input, index) => {
         // Skip hidden fields and non-visible fields
@@ -136,6 +182,21 @@ function analyzeFormFields(isWorkday) {
         if (fieldInfo && isInputRelevant(fieldInfo)) {
             console.log(`Field ${index}: Found relevant field:`, fieldInfo);
             fields.push(fieldInfo);
+            
+            // Store the field value if it exists (enhanced collection)
+            const fieldId = fieldInfo.id || fieldInfo.name || fieldInfo.automationId || `field_${index}`;
+            const fieldValue = fieldInfo.isCustomDropdown ? 
+                fieldInfo.element.textContent.trim() : 
+                fieldInfo.element.value;
+            
+            if (fieldValue && fieldValue.trim() !== '' && !fieldValue.toLowerCase().includes('select')) {
+                console.log(`Storing form value for ${fieldId}: ${fieldValue}`);
+                formData[fieldId] = fieldValue;
+                // Also store by field label for better matching
+                if (fieldInfo.label) {
+                    formData[`label_${fieldInfo.label.toLowerCase().replace(/\s+/g, '_')}`] = fieldValue;
+                }
+            }
             
             // Add debug outline during analysis
             input.classList.add('job-autofill-debug');
@@ -161,6 +222,19 @@ function analyzeFormFields(isWorkday) {
                 console.log(`Workday Dropdown ${index}: Found custom dropdown:`, fieldInfo);
                 fields.push(fieldInfo);
                 
+                // Store dropdown value if it has a meaningful value
+                const fieldId = fieldInfo.id || fieldInfo.name || fieldInfo.automationId || `dropdown_${index}`;
+                const fieldValue = fieldInfo.element.textContent.trim();
+                
+                if (fieldValue && fieldValue.trim() !== '' && !fieldValue.toLowerCase().includes('select')) {
+                    console.log(`Storing dropdown value for ${fieldId}: ${fieldValue}`);
+                    formData[fieldId] = fieldValue;
+                    // Also store by field label for better matching
+                    if (fieldInfo.label) {
+                        formData[`label_${fieldInfo.label.toLowerCase().replace(/\s+/g, '_')}`] = fieldValue;
+                    }
+                }
+                
                 // Add debug outline during analysis
                 dropdown.classList.add('job-autofill-debug');
                 setTimeout(() => {
@@ -168,6 +242,12 @@ function analyzeFormFields(isWorkday) {
                 }, 500);
             }
         });
+    }
+    
+    // Store the form data in Chrome storage - more comprehensive collection
+    if (Object.keys(formData).length > 0) {
+        console.log('Storing form field values:', formData);
+        chrome.storage.local.set({ 'analyzedFormData': formData, 'lastAnalyzedTime': Date.now() });
     }
     
     console.log(`Found ${fields.length} total relevant fields for potential autofill`);
@@ -374,9 +454,10 @@ function isVisible(element) {
     }
 }
 
-function autofillForm(profile, isWorkday) {
+function autofillForm(profile, isWorkday, useFormValues = true) {
     console.log('Starting autofill with profile data:', JSON.stringify(profile.personal, null, 2));
     console.log('Workday mode is enabled:', isWorkday);
+    console.log('Use form values flag:', useFormValues);
     
     // Clear the filled fields set at the start of each autofill operation
     filledFields.clear();
@@ -395,72 +476,176 @@ function autofillForm(profile, isWorkday) {
     
     console.log(`Found ${fields.length} form fields for autofill`);
     
-    // Create a status overlay
-    const overlay = createStatusOverlay();
-    let filledCount = 0;
+    // Get stored form data for prioritizing website values
+    let formData = {};
+    let formDataLoaded = false;
     
-    // Try to autofill each field
-    fields.forEach((field, index) => {
-        try {
-            // Skip if this element has already been filled
-            if (filledFields.has(field.element)) {
-                console.log(`Skipping already filled field: ${field.id || field.name || 'unnamed'}`);
-                return;
-            }
-            
-            // Update the status overlay
-            updateStatusOverlay(overlay, index + 1, fields.length);
-            
-            // Highlight the field being processed
-            field.element.classList.add('job-autofill-highlight');
-            
-            // Find a matching value for this field from the profile
-            const value = findMatchingProfileValue(field, profile, isWorkday);
-            console.log(`Field ${index+1}/${fields.length} - ${field.id || field.name || 'unnamed'}: matched value = ${value}`);
-            
-            // If a value was found, fill the field
-            if (value !== null && value !== undefined) {
-                // Special handling for Workday dropdowns if needed
-                let filled = false;
-                
-                // Check if this is a Workday dropdown field that needs special handling
-                if (isWorkday && field.element.tagName.toLowerCase() === 'select' || 
-                    (field.automationId && field.automationId.includes('phonetype'))) {
-                    // For Workday dropdown fields, try the special handling first
-                    filled = findAndHandleWorkdayDropdown(field, value);
-                }
-                
-                // If special handling didn't work or wasn't applicable, use standard field filling
-                if (!filled) {
-                    fillField(field.element, value);
-                }
-                
-                field.element.classList.add('job-autofill-success');
-                field.element.classList.remove('job-autofill-highlight');
-                filledCount++;
-                // Add to the set of filled fields
-                filledFields.add(field.element);
-                console.log(`Successfully filled field ${field.id || field.name || 'unnamed'} with value: ${value}`);
-            } else {
-                field.element.classList.remove('job-autofill-highlight');
-                console.log(`No matching profile value found for field ${field.id || field.name || 'unnamed'}`);
-            }
-        } catch (error) {
-            console.error(`Error autofilling field ${field.id || field.name || 'unnamed'}:`, error);
-            field.element.classList.remove('job-autofill-highlight');
-        }
+    // Function to continue with autofill after form data is loaded
+    const continueWithAutofill = () => {
+        // Create a status overlay
+        const overlay = createStatusOverlay();
+        let filledCount = 0;
         
-        // Add small delay to make the process visible to the user
-        setTimeout(() => {}, 50);
+        // Try to autofill each field
+        fields.forEach((field, index) => {
+            try {
+                // Skip if this element has already been filled
+                if (filledFields.has(field.element)) {
+                    console.log(`Skipping already filled field: ${field.id || field.name || 'unnamed'}`);
+                    return;
+                }
+                
+                // Update the status overlay
+                updateStatusOverlay(overlay, index + 1, fields.length);
+                
+                // Highlight the field being processed
+                field.element.classList.add('job-autofill-highlight');
+                
+                // Get current field value
+                const fieldValue = field.isCustomDropdown ? field.element.textContent.trim() : field.element.value;
+                
+                // Check if field already has a value from the website form
+                if (fieldValue && fieldValue.trim() !== '' && 
+                    !fieldValue.toLowerCase().includes('select') && 
+                    !fieldValue.toLowerCase().includes('choose')) {
+                    console.log('Field already has a website form value, preserving it:', fieldValue);
+                    field.element.classList.add('job-autofill-success');
+                    field.element.classList.remove('job-autofill-highlight');
+                    // Count this as a successful fill since we're preserving existing data
+                    filledCount++;
+                    return;
+                }
+                
+                // Check if we have a saved form value from previous analysis
+                let formValue = null;
+                const fieldIdentifiers = [
+                    field.id, 
+                    field.name, 
+                    field.label, 
+                    field.automationId,
+                    field.placeholder
+                ].filter(id => id && id.trim() !== '');
+                
+                // Try to find a matching form value using different identifiers
+                for (const identifier of fieldIdentifiers) {
+                    const lowerIdentifier = identifier.toLowerCase();
+                    if (formData[lowerIdentifier]) {
+                        formValue = formData[lowerIdentifier];
+                        console.log(`Found stored form value for ${lowerIdentifier}: ${formValue}`);
+                        break;
+                    }
+                }
+                
+                // If we found a saved form value, use it
+                if (formValue) {
+                    console.log(`Using stored form value for ${field.id || field.name || field.label}: ${formValue}`);
+                    fillField(field.element, formValue);
+                    field.element.classList.add('job-autofill-success');
+                    field.element.classList.remove('job-autofill-highlight');
+                    filledCount++;
+                    filledFields.add(field.element);
+                    return;
+                }
+                
+                // If prioritizing form values but no form value was found,
+                // only fall back to profile data if explicitly allowed
+                if (useFormValues) {
+                    // If we must use form values only, skip this field
+                    field.element.classList.remove('job-autofill-highlight');
+                    console.log(`No form value found for field ${field.id || field.name || 'unnamed'} - skipping`);
+                    return;
+                }
+                
+                // If we're allowed to use profile data as a fallback
+                const value = findMatchingProfileValue(field, profile, isWorkday);
+                console.log(`Field ${index+1}/${fields.length} - ${field.id || field.name || 'unnamed'}: matched profile value = ${value}`);
+                
+                // If a value was found, fill the field
+                if (value !== null && value !== undefined) {
+                    // Special handling for Workday dropdowns if needed
+                    let filled = false;
+                    
+                    // Check if this is a Workday dropdown field that needs special handling
+                    if (isWorkday && field.element.tagName.toLowerCase() === 'select' || 
+                        (field.automationId && field.automationId.includes('phonetype'))) {
+                        // For Workday dropdown fields, try the special handling first
+                        filled = findAndHandleWorkdayDropdown(field, value);
+                    }
+                    
+                    // If special handling didn't work or wasn't applicable, use standard field filling
+                    if (!filled) {
+                        fillField(field.element, value);
+                    }
+                    
+                    field.element.classList.add('job-autofill-success');
+                    field.element.classList.remove('job-autofill-highlight');
+                    filledCount++;
+                    // Add to the set of filled fields
+                    filledFields.add(field.element);
+                    console.log(`Successfully filled field ${field.id || field.name || 'unnamed'} with profile value: ${value}`);
+                } else {
+                    field.element.classList.remove('job-autofill-highlight');
+                    console.log(`No matching value found for field ${field.id || field.name || 'unnamed'}`);
+                }
+            } catch (error) {
+                console.error(`Error autofilling field ${field.id || field.name || 'unnamed'}:`, error);
+                field.element.classList.remove('job-autofill-highlight');
+            }
+            
+            // Add small delay to make the process visible to the user
+            setTimeout(() => {}, 50);
+        });
+        
+        // Remove the overlay after a short delay
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 1500);
+        
+        console.log(`Autofill complete: ${filledCount}/${fields.length} fields filled or preserved`);
+        return { success: true, filledCount: filledCount };
+    };
+    
+    // Get the stored form data first, then continue with autofill
+    return new Promise(resolve => {
+        chrome.storage.local.get(['analyzedFormData'], function(result) {
+            if (result.analyzedFormData) {
+                formData = result.analyzedFormData;
+                console.log('Using stored form data from website:', formData);
+                formDataLoaded = true;
+            } else {
+                console.log('No stored form data available, analyzing form values in real-time');
+                
+                // Create real-time form data from current field values
+                fields.forEach(field => {
+                    const fieldId = field.id || field.name || field.automationId || field.label;
+                    let fieldValue = null;
+                    
+                    if (field.isCustomDropdown) {
+                        fieldValue = field.element.textContent.trim();
+                    } else if (field.element.tagName.toLowerCase() === 'select') {
+                        const selectedOption = field.element.options[field.element.selectedIndex];
+                        fieldValue = selectedOption ? selectedOption.text : field.element.value;
+                    } else {
+                        fieldValue = field.element.value;
+                    }
+                    
+                    if (fieldId && fieldValue && fieldValue.trim() !== '' && 
+                        !fieldValue.toLowerCase().includes('select') &&
+                        !fieldValue.toLowerCase().includes('choose')) {
+                        
+                        formData[fieldId.toLowerCase()] = fieldValue;
+                        if (field.label && field.label.trim() !== '') {
+                            formData[field.label.toLowerCase()] = fieldValue;
+                        }
+                    }
+                });
+            }
+            
+            // Continue with autofill using the resolved promise
+            const result = continueWithAutofill();
+            resolve(result);
+        });
     });
-    
-    // Remove the overlay after a short delay
-    setTimeout(() => {
-        document.body.removeChild(overlay);
-    }, 1500);
-    
-    console.log(`Autofill complete: ${filledCount}/${fields.length} fields filled`);
-    return { success: true, filledCount: filledCount };
 }
 
 function createStatusOverlay() {
@@ -503,11 +688,12 @@ function updateStatusOverlay(overlay, current, total) {
 }
 
 function findMatchingProfileValue(field, profile, isWorkday) {
-    // Skip fields that already have values unless they're empty strings
-    // For custom dropdowns, check the text content instead of value
+    // Always prioritize existing field values from the website
     const fieldValue = field.isCustomDropdown ? field.element.textContent.trim() : field.element.value;
-    if (fieldValue && fieldValue.trim() !== '' && !fieldValue.toLowerCase().includes('select')) {
-        console.log('Field already has a value, skipping:', fieldValue);
+    if (fieldValue && fieldValue.trim() !== '' && 
+        !fieldValue.toLowerCase().includes('select') && 
+        !fieldValue.toLowerCase().includes('choose')) {
+        console.log('Field already has a value from website, preserving it:', fieldValue);
         return null;
     }
     
