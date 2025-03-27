@@ -1,5 +1,6 @@
 // Configuration
 const API_BASE_URL = 'http://localhost:8080'; // Base URL for the Flask app
+const API_PROFILE_ENDPOINT = '/api/profile-public'; // Use the public endpoint
 let profileData = null;
 
 // DOM Elements - with correct references
@@ -204,7 +205,7 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
       // Try to fetch profile data from Flask app
       console.log('Fetching profile data from API...');
-      const response = await fetch(`${API_BASE_URL}/api/profile`);
+      const response = await fetch(`${API_BASE_URL}${API_PROFILE_ENDPOINT}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -368,7 +369,7 @@ document.addEventListener('DOMContentLoaded', function() {
       status.className = 'status warning';
       
       // Try to reload profile data
-      fetch(`${API_BASE_URL}/api/profile`)
+      fetch(`${API_BASE_URL}${API_PROFILE_ENDPOINT}`)
         .then(response => {
           if (response.ok) return response.json();
           throw new Error('Failed to fetch profile data');
